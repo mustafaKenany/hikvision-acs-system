@@ -27,6 +27,9 @@ import EmployeeSchedule from './EmployeeSchedule.js';
 import Notification from './Notification.js';
 import AuditLog from './AuditLog.js';
 import SystemSetting from './SystemSetting.js';
+import AccessTimeZone from './AccessTimeZone.js';
+import Door from './Door.js';
+import AccessPermission from './AccessPermission.js';
 
 // Initialize all models
 const models = {
@@ -44,6 +47,9 @@ const models = {
   Notification: Notification.init(sequelize),
   AuditLog: AuditLog.init(sequelize),
   SystemSetting: SystemSetting.init(sequelize),
+  AccessTimeZone: AccessTimeZone.init(sequelize),
+  Door: Door.init(sequelize),
+  AccessPermission: AccessPermission.init(sequelize),
 };
 
 // Setup associations

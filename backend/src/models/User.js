@@ -43,9 +43,15 @@ class User extends Model {
           },
         },
         role: {
-          type: DataTypes.ENUM('super_admin', 'admin', 'manager', 'viewer'),
+          type: DataTypes.ENUM('super_admin', 'admin', 'manager', 'viewer', 'custom'),
           defaultValue: 'viewer',
           allowNull: false,
+        },
+        permissions: {
+          type: DataTypes.JSONB,
+          defaultValue: [],
+          allowNull: false,
+          comment: 'Custom permissions array for fine-grained access control',
         },
         phone: {
           type: DataTypes.STRING(20),
@@ -135,6 +141,18 @@ class User extends Model {
   }
 
   hasPermission(action) {
+    // إذا المستخدم عنده role مخصص، استخدم permissions الخاصة به
+    if (this.role === 'custom' && this.permissions && this.permissions.length > 0) {
+      if (this.permissions.includes('*')) return true;
+      if (this.permissions.includes(action)) return true;
+      
+      const [resource, operation] = action.split(':');
+      if (this.permissions.includes(`${resource}:*`)) return true;
+      
+      return false;
+    }
+
+    // الصلاحيات الافتراضية للأدوار المعرفة مسبقاً
     const permissions = {
       super_admin: ['*'],
       admin: [
@@ -144,9 +162,14 @@ class User extends Model {
         'users:delete',
         'employees:*',
         'devices:*',
+        'doors:*',
         'attendance:*',
         'reports:*',
+        'reports:print',
+        'reports:export',
         'settings:*',
+        'audit:read',
+        'notifications:*',
       ],
       manager: [
         'users:read',
@@ -154,10 +177,19 @@ class User extends Model {
         'employees:create',
         'employees:update',
         'devices:read',
+        'doors:read',
         'attendance:*',
         'reports:read',
+        'reports:print',
+        'reports:export',
+        'notifications:read',
       ],
-      viewer: ['employees:read', 'attendance:read', 'reports:read'],
+      viewer: [
+        'employees:read',
+        'attendance:read',
+        'reports:read',
+        'reports:print',
+      ],
     };
 
     const userPermissions = permissions[this.role] || [];
@@ -169,6 +201,35 @@ class User extends Model {
     if (userPermissions.includes(`${resource}:*`)) return true;
 
     return false;
+  }
+
+  // دالة لتعيين صلاحيات مخصصة
+  setCustomPermissions(permissionsArray) {
+    this.role = 'custom';
+    this.permissions = permissionsArray;
+    return this.save();
+  }
+
+  // دالة لإضافة صلاحية واحدة
+  addPermission(permission) {
+    if (this.role !== 'custom') {
+      this.role = 'custom';
+      this.permissions = [];
+    }
+    if (!this.permissions.includes(permission)) {
+      this.permissions.push(permission);
+      return this.save();
+    }
+    return Promise.resolve(this);
+  }
+
+  // دالة لإزالة صلاحية واحدة
+  removePermission(permission) {
+    if (this.role === 'custom') {
+      this.permissions = this.permissions.filter(p => p !== permission);
+      return this.save();
+    }
+    return Promise.resolve(this);
   }
 }
 

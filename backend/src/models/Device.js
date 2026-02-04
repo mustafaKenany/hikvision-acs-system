@@ -39,6 +39,15 @@ class Device extends Model {
           allowNull: true,
           unique: true,
         },
+        mac_address: {
+          type: DataTypes.STRING(17),
+          allowNull: true,
+          unique: true,
+          validate: {
+            is: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
+          },
+          comment: 'MAC Address (e.g., 00:11:22:33:44:55)',
+        },
         ip_address: {
           type: DataTypes.STRING(45),
           allowNull: false,

@@ -25,6 +25,15 @@ class AttendanceLog extends Model {
             key: 'id',
           },
         },
+        door_id: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+          references: {
+            model: 'doors',
+            key: 'id',
+          },
+          comment: 'Specific door accessed (if available)',
+        },
         event_time: {
           type: DataTypes.DATE,
           allowNull: false,
@@ -108,6 +117,12 @@ class AttendanceLog extends Model {
     this.belongsTo(models.Device, {
       foreignKey: 'device_id',
       as: 'device',
+    });
+
+    // AttendanceLog belongs to Door (optional)
+    this.belongsTo(models.Door, {
+      foreignKey: 'door_id',
+      as: 'door',
     });
   }
 
