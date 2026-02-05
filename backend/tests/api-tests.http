@@ -1,0 +1,81 @@
+### Authentication API Tests
+### Base URL: http://localhost:3000
+
+@baseUrl = http://localhost:3000/api
+
+### 1. Login - Super Admin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@demo.test",
+  "password": "Admin@123"
+}
+
+### 2. Login - Manager
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "manager@demo.test",
+  "password": "Manager@123"
+}
+
+### 3. Login - Viewer
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "viewer@demo.test",
+  "password": "Viewer@123"
+}
+
+### 4. Login - Invalid Credentials
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@demo.test",
+  "password": "WrongPassword"
+}
+
+### 5. Get Current User (replace TOKEN with actual token from login)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer TOKEN
+
+### 6. Logout
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer TOKEN
+
+### 7. Forgot Password
+POST {{baseUrl}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "admin@demo.test"
+}
+
+### 8. Reset Password (replace TOKEN with reset token from forgot password)
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "RESET_TOKEN_HERE",
+  "newPassword": "NewPassword@123"
+}
+
+### 9. Change Password
+POST {{baseUrl}}/auth/change-password
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{
+  "currentPassword": "Admin@123",
+  "newPassword": "NewAdmin@123"
+}
+
+### Health Check
+GET http://localhost:3000/health
+
+### API Info
+GET http://localhost:3000/api

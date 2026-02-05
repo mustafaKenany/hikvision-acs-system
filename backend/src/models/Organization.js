@@ -146,7 +146,7 @@ class Organization extends Model {
     // Organization has many SystemSettings
     this.hasMany(models.SystemSetting, {
       foreignKey: 'organization_id',
-      as: 'settings',
+      as: 'systemSettings',
       onDelete: 'CASCADE',
     });
   }
