@@ -30,7 +30,7 @@ const startServer = async () => {
       // alter: true سيحدث الجداول دون حذف البيانات
       // await sequelize.sync({ alter: true });
       // في production: استخدم migrations فقط
-      logger.info('✅ Database models synced');
+      logger.info('✅ Database models synced (skipped for now)');
     }
 
     // 3. Start HTTP server

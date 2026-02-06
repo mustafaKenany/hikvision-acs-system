@@ -123,12 +123,12 @@ export async function getEmployeeById(requesterId, employeeId) {
       {
         model: FingerprintTemplate,
         as: 'fingerprints',
-        attributes: ['id', 'finger_index', 'template_data', 'quality_score', 'created_at']
+        attributes: ['id', 'finger_number', 'template_data', 'quality_score', 'created_at']
       },
       {
         model: CardTemplate,
         as: 'cards',
-        attributes: ['id', 'card_no', 'card_type', 'is_active', 'created_at']
+        attributes: ['id', 'card_number', 'card_type', 'is_active', 'created_at']
       }
     ]
   });
@@ -499,11 +499,11 @@ export async function getEmployeeBiometrics(userId, employeeId) {
     }),
     FingerprintTemplate.findAll({
       where: { employee_id: employeeId },
-      attributes: ['id', 'finger_index', 'template_data', 'quality_score', 'created_at', 'updated_at']
+      attributes: ['id', 'finger_number', 'template_data', 'quality_score', 'created_at', 'updated_at']
     }),
     CardTemplate.findAll({
       where: { employee_id: employeeId },
-      attributes: ['id', 'card_no', 'card_type', 'is_active', 'created_at', 'updated_at']
+      attributes: ['id', 'card_number', 'card_type', 'is_active', 'created_at', 'updated_at']
     })
   ]);
 

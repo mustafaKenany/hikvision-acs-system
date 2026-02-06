@@ -44,6 +44,15 @@ class FingerprintTemplate extends Model {
           allowNull: true,
           comment: 'Base64 encoded fingerprint template',
         },
+        quality_score: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+          validate: {
+            min: 0,
+            max: 100,
+          },
+          comment: 'Fingerprint quality score (0-100)',
+        },
         sync_status: {
           type: DataTypes.ENUM('pending', 'synced', 'failed'),
           defaultValue: 'pending',
