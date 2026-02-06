@@ -121,4 +121,29 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
   next();
 });
 
-export { authenticate, optionalAuth };
+/**
+ * Authorization middleware to check user roles
+ * @param {Array} roles - Array of allowed roles
+ */
+const authorize = (roles = []) => {
+  return (req, res, next) => {
+    // Check if user is authenticated
+    if (!req.user) {
+      throw new AppError('غير مصرح - يرجى تسجيل الدخول', 401);
+    }
+
+    // Convert single role to array
+    if (typeof roles === 'string') {
+      roles = [roles];
+    }
+
+    // Check if user role is in allowed roles
+    if (!roles.includes(req.user.role)) {
+      throw new AppError('ليس لديك صلاحية للوصول إلى هذا المورد', 403);
+    }
+
+    next();
+  };
+};
+
+export { authenticate, optionalAuth, authorize };

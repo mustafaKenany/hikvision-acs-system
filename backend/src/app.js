@@ -24,6 +24,7 @@ import logger from './utils/logger.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import employeeRoutes from './routes/employeeRoutes.js';
+import deviceRoutes from './routes/deviceRoutes.js';
 // ... etc
 
 // Create Express app
@@ -122,7 +123,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/employees', employeeRoutes);
 
 // Device routes
-// app.use('/api/devices', deviceRoutes);
+app.use('/api/devices', deviceRoutes);
 
 // Door routes
 // app.use('/api/doors', doorRoutes);

@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
-import { setupWebSocket } from './websocket/index.js';
+// import { setupWebSocket } from './websocket/index.js'; // TODO: WebSocket not implemented yet
 import { setupRoutes } from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
@@ -79,9 +79,9 @@ app.use((req, res) => {
 });
 
 // ============================================
-// WebSocket Setup
+// WebSocket Setup (TODO: Not implemented yet)
 // ============================================
-setupWebSocket(httpServer);
+// setupWebSocket(httpServer);
 
 // ============================================
 // Database Connection & Server Start

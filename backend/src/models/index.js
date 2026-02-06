@@ -56,5 +56,28 @@ Object.values(models).forEach(model => {
   }
 });
 
+// Export sequelize and models
 export { sequelize };
+
+// Export individual models
+export {
+  Organization,
+  User,
+  Device,
+  Employee,
+  FaceTemplate,
+  CardTemplate,
+  FingerprintTemplate,
+  AttendanceLog,
+  AttendanceSummary,
+  WorkSchedule,
+  EmployeeSchedule,
+  Notification,
+  AuditLog,
+  SystemSetting,
+  AccessTimeZone,
+  Door,
+  AccessPermission
+};
+
 export default models;

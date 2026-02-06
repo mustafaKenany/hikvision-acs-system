@@ -1321,5 +1321,754 @@ Attendance (7)
 
 ---
 
-**آخر تحديث:** 5 فبراير 2026  
-**الحالة:** جاهز للبدء بالمرحلة 1 (Middleware)
+## 🔄 تحديث الحالة - 7 فبراير 2026
+
+### ✅ **ما تم إنجازه:**
+
+#### **المراحل المكتملة 100%:**
+1. ✅ **Middleware + Express** (المرحلة 1) - مكتمل
+2. ✅ **Authentication System** (المرحلة 2) - 7 endpoints مكتملة
+3. ✅ **Users Management API** (المرحلة 3) - CRUD كامل
+4. ✅ **Employees Management API** (المرحلة 4) - 9 endpoints مكتملة
+5. ✅ **Devices Management API** (المرحلة 5) - 11 endpoints مكتملة
+
+#### **الوثائق المُنشأة:**
+- ✅ `HikVision_Users_API_Documentation_Feb5_2026.html`
+- ✅ `HikVision_Employees_API_Documentation_Feb6_2026.html`
+- ✅ `HikVision_Auth_API_Documentation_Feb6_2026.html`
+- ✅ `HikVision_Devices_API_Documentation_Feb6_2026.html`
+- ✅ `System_Status_and_Gaps_Feb6_2026.md` (Gap Analysis)
+
+#### **قاعدة البيانات:**
+- ✅ 17 جدول مُنشأة وتعمل بنجاح
+- ✅ Database schema مُختبر ومُحدّث
+- ✅ Soft delete مُفعّل في الجداول الرئيسية
+- ✅ Audit trail columns موجودة
+
+#### **الاختبارات:**
+- ✅ Devices API - مُختبر يدوياً ويعمل مع Database
+- ✅ Employees API - مُختبر يدوياً (6 موظفين في DB)
+- ✅ Auth API - تسجيل الدخول يعمل بنجاح
+- ⚠️ لا توجد automated tests بعد
+
+---
+
+## 🚨 النواقص الحرجة المكتشفة (CRITICAL GAPS)
+
+بعد مراجعة شاملة للنظام، تم اكتشاف نواقص حرجة **يجب** معالجتها قبل المتابعة:
+
+---
+
+### 🔴 المرحلة 3.5: **Organizations Management API** (أولوية: 10/10 - BLOCKING) ⭐⭐⭐⭐⭐
+
+**⚠️ هذه المرحلة مفقودة تماماً من الخطة الأصلية!**
+
+#### **لماذا هذه المرحلة CRITICAL؟**
+- 🚫 **BLOCKING:** بدون Organizations API، لا يمكن:
+  - إنشاء مؤسسات جديدة
+  - إدارة الاشتراكات (Subscription Plans)
+  - تهيئة إعدادات المؤسسة
+  - التحكم في الحدود (max_employees, max_devices)
+- 🏢 النظام **Multi-tenant** ويعتمد كلياً على Organizations
+- 📊 جميع الـ APIs الأخرى تفترض وجود organization_id
+
+#### **الوضع الحالي:**
+- ✅ **Model:** `Organization.js` موجود ومُعرّف بشكل كامل
+- ✅ **Database Table:** `organizations` موجود وفيه بيانات
+- ❌ **Service:** `organizationService.js` - **مفقود**
+- ❌ **Controller:** `organizationController.js` - **مفقود**
+- ❌ **Validators:** `organizationValidator.js` - **مفقود**
+- ❌ **Routes:** `organizationRoutes.js` - **مفقود**
+- ❌ **Tests:** غير موجودة
+- ❌ **Documentation:** مفقودة
+
+#### **الملفات المطلوبة:**
+```
+src/
+├── services/
+│   └── organizationService.js     # منطق الأعمال
+├── controllers/
+│   └── organizationController.js  # معالجات الطلبات
+├── validators/
+│   └── organizationValidator.js   # التحقق من البيانات
+└── routes/
+    └── organizationRoutes.js      # مسارات API
+```
+
+#### **API Endpoints المطلوبة (10 endpoints):**
+
+**1. GET /api/organizations/** 
+- عرض جميع المؤسسات (super_admin فقط)
+- Pagination + Search + Filters
+- Filter: subscription_plan, is_active
+
+**2. GET /api/organizations/:id**
+- عرض تفاصيل مؤسسة
+- Authorization: super_admin أو users من نفس المؤسسة
+
+**3. POST /api/organizations/**
+- إنشاء مؤسسة جديدة (super_admin فقط)
+- Validation: email unique, name required
+- إنشاء admin user تلقائياً للمؤسسة
+
+**4. PUT /api/organizations/:id**
+- تحديث بيانات المؤسسة
+- Authorization: super_admin أو admin في نفس المؤسسة
+- لا يمكن تحديث email (منع التغيير)
+
+**5. DELETE /api/organizations/:id**
+- حذف مؤسسة (soft delete)
+- super_admin فقط
+- التحقق من عدم وجود موظفين/أجهزة نشطة
+
+**6. POST /api/organizations/:id/activate**
+- تفعيل مؤسسة معطلة
+
+**7. POST /api/organizations/:id/deactivate**
+- تعطيل مؤسسة
+
+**8. PUT /api/organizations/:id/subscription**
+- تحديث خطة الاشتراك (super_admin فقط)
+- Body: `{ subscription_plan, subscription_end, max_employees, max_devices }`
+
+**9. PUT /api/organizations/:id/settings**
+- تحديث إعدادات المؤسسة (JSONB)
+- Body: `{ settings: { language: "ar", timezone: "Asia/Baghdad", ... } }`
+
+**10. GET /api/organizations/stats/overview**
+- إحصائيات المؤسسات (super_admin فقط)
+- Total, Active, Inactive, بالخطة
+
+#### **Organization Model Fields:**
+```javascript
+{
+  id,
+  name,                   // اسم المؤسسة
+  email,                  // بريد رسمي (unique)
+  phone,
+  address,
+  subscription_plan,      // free, basic, pro, enterprise
+  subscription_start,
+  subscription_end,
+  max_employees,          // حد الموظفين
+  max_devices,            // حد الأجهزة
+  storage_limit_mb,       // حد التخزين
+  is_active,
+  settings,               // JSONB (مرن)
+  created_at,
+  updated_at
+}
+```
+
+#### **Authorization Logic:**
+- **super_admin:** الوصول الكامل لكل المؤسسات
+- **admin:** يستطيع تعديل مؤسسته فقط (لا يستطيع تغيير subscription)
+- **manager/viewer:** قراءة فقط لمؤسستهم
+
+#### **Validation Rules:**
+```javascript
+// Create
+- name: required, 2-255 chars
+- email: required, unique, valid email
+- phone: optional, valid format
+- subscription_plan: enum [free, basic, pro, enterprise]
+- max_employees: number, > 0
+- max_devices: number, > 0
+
+// Update
+- name: optional, 2-255 chars
+- email: cannot change (blocked)
+- phone: optional
+- is_active: boolean
+```
+
+#### **تقدير الوقت:** 6-8 ساعات (باستخدام templates من Devices API)
+
+#### **معايير النجاح:**
+- ✅ CRUD كامل للمؤسسات
+- ✅ إدارة الاشتراكات
+- ✅ Authorization محكم
+- ✅ Validation شامل
+- ✅ Tests يدوية تعمل
+- ✅ Documentation HTML مُنشأة
+
+---
+
+### 🟠 المرحلة 16: **File Upload System** (أولوية: 9/10 - HIGH) ⭐⭐⭐⭐
+
+**⚠️ تم رفع الأولوية من 4/10 إلى 9/10**
+
+#### **لماذا هذه المرحلة مهمة جداً الآن؟**
+- 📷 **صور الموظفين:** ضرورية لـ Face Recognition
+- 🏢 **شعارات المؤسسات:** للعرض في التقارير
+- 📄 **Bulk Import CSV:** لاستيراد موظفين بالجملة
+- 📎 **مرفقات المستندات:** ID cards, certificates
+
+#### **الوضع الحالي:**
+- ❌ لا توجد middleware للـ file upload
+- ❌ لا توجد معالجة للصور (resize, compress)
+- ❌ لا يوجد storage strategy محدد
+- ❌ Employee photo field موجود لكن غير مُستخدم
+
+#### **المكتبات المطلوبة:**
+```bash
+npm install multer sharp                    # File upload + Image processing
+npm install @types/multer --save-dev        # TypeScript types (optional)
+```
+
+#### **الملفات المطلوبة:**
+```
+src/
+├── middlewares/
+│   ├── upload.js              # Multer configuration
+│   └── imageProcessor.js      # Sharp image processing
+├── utils/
+│   └── fileValidator.js       # File validation utilities
+└── uploads/                   # Storage directory (local)
+    ├── employees/
+    │   └── photos/
+    ├── organizations/
+    │   └── logos/
+    └── temp/
+```
+
+#### **Upload Middleware Setup:**
+```javascript
+// middlewares/upload.js
+import multer from 'multer';
+import path from 'path';
+import crypto from 'crypto';
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = `uploads/${req.uploadPath || 'temp'}`;
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif|pdf/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+  
+  if (extname && mimetype) {
+    cb(null, true);
+  } else {
+    cb(new AppError('نوع الملف غير مدعوم. يُسمح فقط بـ: JPEG, PNG, GIF, PDF', 400), false);
+  }
+};
+
+export const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024  // 5MB max
+  }
+});
+```
+
+#### **Image Processing:**
+```javascript
+// middlewares/imageProcessor.js
+import sharp from 'sharp';
+
+export const processEmployeePhoto = async (file) => {
+  const outputPath = file.path.replace(/\.(jpg|jpeg|png)$/i, '-processed.jpg');
+  
+  await sharp(file.path)
+    .resize(400, 400, {
+      fit: 'cover',
+      position: 'center'
+    })
+    .jpeg({ quality: 85 })
+    .toFile(outputPath);
+  
+  return outputPath;
+};
+```
+
+#### **استخدام في Routes:**
+```javascript
+// routes/employeeRoutes.js
+import { upload } from '../middlewares/upload.js';
+import { processEmployeePhoto } from '../middlewares/imageProcessor.js';
+
+// Upload single photo
+router.post('/:id/photo', 
+  authenticate,
+  authorize(['admin', 'manager']),
+  (req, res, next) => {
+    req.uploadPath = 'employees/photos';
+    next();
+  },
+  upload.single('photo'),
+  async (req, res, next) => {
+    if (req.file) {
+      req.file.processedPath = await processEmployeePhoto(req.file);
+    }
+    next();
+  },
+  employeeController.uploadPhoto
+);
+
+// Upload organization logo
+router.post('/:id/logo',
+  authenticate,
+  authorize(['super_admin', 'admin']),
+  (req, res, next) => {
+    req.uploadPath = 'organizations/logos';
+    next();
+  },
+  upload.single('logo'),
+  organizationController.uploadLogo
+);
+
+// Bulk import CSV
+router.post('/import',
+  authenticate,
+  authorize(['admin']),
+  upload.single('csvFile'),
+  employeeController.bulkImport
+);
+```
+
+#### **Security Considerations:**
+- ✅ File type validation (whitelist)
+- ✅ File size limits (5MB للصور، 10MB للـ CSV)
+- ✅ Filename sanitization (منع path traversal)
+- ✅ Virus scanning (optional - ClamAV integration)
+- ✅ Store outside public directory
+- ✅ Serve files via API (access control)
+
+#### **Serving Uploaded Files:**
+```javascript
+// app.js
+// ❌ DON'T: app.use('/uploads', express.static('uploads'));  // Insecure!
+
+// ✅ DO: Serve via protected endpoint
+router.get('/employees/:id/photo', 
+  authenticate,
+  employeeController.getPhoto
+);
+
+// Controller
+async getPhoto(req, res) {
+  const employee = await Employee.findByPk(req.params.id);
+  if (!employee || !employee.photo_path) {
+    throw new AppError('الصورة غير موجودة', 404);
+  }
+  
+  // Check authorization (same organization)
+  if (req.user.organization_id !== employee.organization_id && req.user.role !== 'super_admin') {
+    throw new AppError('غير مصرح', 403);
+  }
+  
+  res.sendFile(path.resolve(employee.photo_path));
+}
+```
+
+#### **تقدير الوقت:** 1 يوم عمل (8 ساعات)
+
+#### **معايير النجاح:**
+- ✅ رفع صور الموظفين بنجاح
+- ✅ معالجة الصور (resize + compress)
+- ✅ رفع شعارات المؤسسات
+- ✅ CSV import للموظفين
+- ✅ Authorization على الملفات
+- ✅ Validation شامل
+
+---
+
+### 🟠 المرحلة 17: **Automated Testing Suite** (أولوية: 9/10 - HIGH) ⭐⭐⭐⭐
+
+**⚠️ مرحلة جديدة - لم تكن في الخطة الأصلية**
+
+#### **لماذا Testing ضروري الآن؟**
+- 🐛 **منع Bugs:** اكتشاف الأخطاء قبل Production
+- 🔄 **Regression Prevention:** التأكد أن التحديثات لا تكسر features قديمة
+- 📈 **Code Quality:** زيادة الثقة في الكود
+- 🚀 **Faster Development:** اختبار سريع بدلاً من Manual Testing
+
+#### **الوضع الحالي:**
+- ✅ Manual PowerShell tests موجودة
+- ❌ لا توجد automated tests
+- ❌ لا يوجد test framework
+- ❌ لا يوجد CI/CD pipeline
+
+#### **المكتبات المطلوبة:**
+```bash
+npm install --save-dev jest supertest @types/jest
+npm install --save-dev @faker-js/faker      # Test data generation
+```
+
+#### **File Structure:**
+```
+backend/
+├── tests/
+│   ├── setup.js                    # Test setup & teardown
+│   ├── helpers/
+│   │   ├── authHelper.js           # Login helper
+│   │   ├── dbHelper.js             # Database seeding
+│   │   └── faker.js                # Fake data generator
+│   ├── unit/
+│   │   ├── services/
+│   │   │   ├── authService.test.js
+│   │   │   ├── userService.test.js
+│   │   │   ├── employeeService.test.js
+│   │   │   └── deviceService.test.js
+│   │   └── utils/
+│   │       ├── jwt.test.js
+│   │       ├── bcrypt.test.js
+│   │       └── validators.test.js
+│   └── integration/
+│       ├── auth.test.js            # Auth endpoints
+│       ├── users.test.js           # Users CRUD
+│       ├── employees.test.js       # Employees CRUD
+│       ├── devices.test.js         # Devices CRUD
+│       └── organizations.test.js   # Organizations CRUD
+└── package.json                    # Test scripts
+```
+
+#### **package.json Configuration:**
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:unit": "jest --testPathPattern=tests/unit"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/server.js",
+      "!src/database/**"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"]
+  }
+}
+```
+
+#### **Sample Integration Test:**
+```javascript
+// tests/integration/auth.test.js
+import request from 'supertest';
+import app from '../../src/app.js';
+import { sequelize } from '../../src/models/index.js';
+
+describe('Authentication API', () => {
+  beforeAll(async () => {
+    await sequelize.sync({ force: true });
+    // Seed test data
+  });
+
+  afterAll(async () => {
+    await sequelize.close();
+  });
+
+  describe('POST /api/auth/login', () => {
+    it('should login with valid credentials', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'admin@demo.test',
+          password: 'Admin@123'
+        });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveProperty('tokens');
+      expect(res.body.data.tokens).toHaveProperty('accessToken');
+    });
+
+    it('should reject invalid credentials', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'admin@demo.test',
+          password: 'wrongpassword'
+        });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.success).toBe(false);
+    });
+  });
+});
+```
+
+#### **Test Coverage Goals:**
+- **Unit Tests:** 80%+ coverage
+- **Integration Tests:** All major endpoints
+- **Priority APIs:** Auth, Users, Employees, Devices, Organizations
+
+#### **تقدير الوقت:** 1-2 أسابيع (تدريجياً مع التطوير)
+
+#### **معايير النجاح:**
+- ✅ Jest configured ويعمل
+- ✅ Auth API: 100% endpoints مُختبرة
+- ✅ Users API: CRUD كامل مُختبر
+- ✅ Employees API: CRUD مُختبر
+- ✅ Devices API: مُختبر
+- ✅ Organizations API: مُختبر (بعد إنشائه)
+- ✅ Coverage > 70%
+
+---
+
+### 🟡 المرحلة 18: **Email Templates System** (أولوية: 8/10 - MEDIUM) ⭐⭐⭐
+
+**⚠️ تحديث: Templates غير مكتملة**
+
+#### **الوضع الحالي:**
+- ✅ Nodemailer configured
+- ✅ Email service موجود (`utils/emailService.js`)
+- ⚠️ Password reset email موجود (بسيط)
+- ❌ Welcome email - مفقود
+- ❌ Subscription expiry alert - مفقود
+- ❌ Device offline notification - مفقود
+- ❌ HTML templates احترافية - مفقودة
+
+#### **الملفات المطلوبة:**
+```
+backend/
+└── templates/
+    └── emails/
+        ├── layout.html              # Base template
+        ├── welcome.html             # ترحيب مستخدم جديد
+        ├── password-reset.html      # إعادة تعيين كلمة المرور
+        ├── subscription-expiry.html # تنبيه انتهاء الاشتراك
+        ├── device-offline.html      # جهاز غير متصل
+        ├── attendance-report.html   # تقرير الحضور الشهري
+        └── styles/
+            └── email.css            # Inline CSS
+```
+
+#### **Email Templates المطلوبة:**
+
+**1. Welcome Email** (عند إنشاء user جديد)
+- العنوان: "مرحباً بك في نظام HikVision ACS"
+- المحتوى: اسم المستخدم، دوره، رابط تسجيل الدخول، بيانات الاتصال
+
+**2. Password Reset** (تحسين الموجود)
+- Responsive HTML design
+- زر واضح للـ reset link
+- تحذير أمني (إذا لم تطلب هذا، تجاهل الرسالة)
+
+**3. Subscription Expiry Alert** (قبل انتهاء الاشتراك بـ 7 أيام)
+- تنبيه بقرب انتهاء الاشتراك
+- تفاصيل الخطة والتكلفة
+- رابط للتجديد
+
+**4. Device Offline Notification**
+- إشعار للـ admin عند انقطاع device
+- Device name, location, last_seen
+- تعليمات troubleshooting
+
+**5. Monthly Attendance Report**
+- تقرير شهري تلقائي
+- إحصائيات: حضور، تأخير، غياب
+- جدول بتفاصيل الأيام
+
+#### **تقدير الوقت:** 2-3 أيام
+
+---
+
+### 🟡 المرحلة 19: **Security Hardening** (أولوية: 8/10 - MEDIUM) ⭐⭐⭐
+
+**⚠️ مرحلة جديدة - حماية إضافية**
+
+#### **الوضع الحالي:**
+- ✅ Helmet.js configured
+- ✅ CORS setup
+- ✅ Rate limiting (basic)
+- ✅ JWT authentication
+- ✅ bcrypt password hashing
+- ❌ XSS protection - ناقص
+- ❌ NoSQL injection prevention - ناقص
+- ❌ Input sanitization - ناقص
+- ❌ CSRF protection - ناقص
+
+#### **المكتبات المطلوبة:**
+```bash
+npm install xss-clean express-mongo-sanitize hpp validator
+```
+
+#### **Implementations المطلوبة:**
+
+**1. XSS Protection:**
+```javascript
+// app.js
+import xss from 'xss-clean';
+app.use(xss());  // Clean any user input
+```
+
+**2. NoSQL Injection Prevention:**
+```javascript
+import mongoSanitize from 'express-mongo-sanitize';
+app.use(mongoSanitize());  // Remove $ and . from user input
+```
+
+**3. HTTP Parameter Pollution:**
+```javascript
+import hpp from 'hpp';
+app.use(hpp());  // Protect against parameter pollution
+```
+
+**4. Input Sanitization in Validators:**
+```javascript
+// validators/userValidator.js
+import validator from 'validator';
+
+const createUserValidator = [
+  body('email')
+    .isEmail().withMessage('بريد إلكتروني غير صحيح')
+    .normalizeEmail()
+    .trim()
+    .escape(),
+  
+  body('first_name')
+    .isLength({ min: 2, max: 50 })
+    .trim()
+    .escape()  // منع XSS
+];
+```
+
+**5. CSRF Protection (للـ form-based requests):**
+```javascript
+import csrf from 'csurf';
+const csrfProtection = csrf({ cookie: true });
+```
+
+**6. Security Headers Audit:**
+```javascript
+// app.js - Enhanced Helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  hsts: {
+    maxAge: 31536000,  // 1 year
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+```
+
+#### **تقدير الوقت:** 1 يوم
+
+#### **معايير النجاح:**
+- ✅ XSS protection enabled
+- ✅ NoSQL injection prevented
+- ✅ Input sanitization في جميع validators
+- ✅ Security headers محسّنة
+- ✅ Dependency vulnerability scan (npm audit)
+
+---
+
+### 🟡 المرحلة 20: **HikVision SDK Integration** (أولوية: 8/10 - MEDIUM) ⭐⭐⭐
+
+**⚠️ حالياً: Placeholder فقط**
+
+#### **الوضع الحالي:**
+- ✅ `POST /api/devices/:id/sync` موجود (يحدث timestamp فقط)
+- ❌ لا يوجد اتصال حقيقي بالأجهزة
+- ❌ SDK غير مُثبّت
+- ❌ لا توجد معالجة للـ events
+
+#### **المطلوب:**
+- تثبيت HikVision SDK
+- إنشاء `hikvisionService.js`
+- تكامل حقيقي مع الأجهزة:
+  - Upload face templates
+  - Upload fingerprints
+  - Upload card data
+  - Get attendance logs
+  - Open doors remotely
+
+#### **تقدير الوقت:** 2-3 أسابيع (learning curve)
+
+---
+
+### 🟡 المرحلة 21: **WebSocket Real-time System** (أولوية: 8/10 - MEDIUM) ⭐⭐⭐
+
+**⚠️ غير موجود حالياً**
+
+#### **Use Cases:**
+- إشعارات فورية (device offline, access denied)
+- Live attendance updates
+- Real-time dashboard
+- Device status monitoring
+
+#### **المكتبات:**
+```bash
+npm install socket.io
+```
+
+#### **تقدير الوقت:** 1 أسبوع
+
+---
+
+## 📊 ملخص الأولويات المُحدّثة
+
+### **يجب إنجازها فوراً (الأسبوع الحالي):**
+1. 🔴 **Organizations API** (10/10) - 6-8 ساعات ⚡ **FIRST**
+2. 🟠 **File Upload System** (9/10) - 1 يوم
+3. 🟡 **Security Hardening** (8/10) - 1 يوم
+
+### **الأسبوعين القادمين:**
+4. 🟠 **Testing Suite** (9/10) - تدريجياً
+5. 🟡 **Email Templates** (8/10) - 2-3 أيام
+
+### **الشهر القادم:**
+6. 🟡 **HikVision SDK** (8/10) - 2-3 أسابيع
+7. 🟡 **WebSocket Real-time** (8/10) - 1 أسبوع
+
+---
+
+## 🎯 خطة العمل المُوصى بها
+
+### **اليوم الأول (8 ساعات):**
+- ✅ Organizations API (كامل)
+- ✅ Documentation
+
+### **اليوم الثاني (8 ساعات):**
+- ✅ File Upload System
+- ✅ Testing
+- ✅ Security Hardening (XSS, Sanitization)
+
+### **الأسبوع الثاني:**
+- ✅ Email Templates (يومين)
+- ✅ Jest Setup + Auth Tests (يومين)
+- ✅ Users/Employees Tests (يوم)
+
+### **الأسبوع الثالث-الرابع:**
+- ✅ HikVision SDK Integration
+- ✅ WebSocket Setup
+
+---
+
+**آخر تحديث:** 7 فبراير 2026  
+**الحالة:** 
+- ✅ المراحل 1-5 مكتملة
+- 🚨 Organizations API - **CRITICAL** (يجب البدء فوراً)
+- 🔄 النظام جاهز للاستخدام الأساسي بعد Organizations API
