@@ -37,7 +37,7 @@ const authenticate = asyncHandler(async (req, res, next) => {
         {
           model: Organization,
           as: 'organization',
-          attributes: ['id', 'name', 'subscription_type', 'subscription_valid_until']
+          attributes: ['id', 'name', 'subscription_plan', 'subscription_end']
         }
       ]
     });
@@ -53,9 +53,9 @@ const authenticate = asyncHandler(async (req, res, next) => {
     }
 
     // 7. التحقق من صلاحية الاشتراك (للمؤسسة)
-    if (user.organization && user.organization.subscription_valid_until) {
+    if (user.organization && user.organization.subscription_end) {
       const now = new Date();
-      const validUntil = new Date(user.organization.subscription_valid_until);
+      const validUntil = new Date(user.organization.subscription_end);
 
       if (now > validUntil) {
         throw new AppError('انتهت صلاحية اشتراك المؤسسة - يرجى التجديد', 403);

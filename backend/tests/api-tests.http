@@ -79,3 +79,242 @@ GET http://localhost:3000/health
 
 ### API Info
 GET http://localhost:3000/api
+
+###############################################
+### Users Management API Tests
+###############################################
+
+@token = YOUR_ACCESS_TOKEN_HERE
+
+### 1. Get All Users (with pagination)
+GET {{baseUrl}}/users?page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 2. Get All Users (with search)
+GET {{baseUrl}}/users?search=admin&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 3. Get All Users (filter by role)
+GET {{baseUrl}}/users?role=admin&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 4. Get All Users (filter by active status)
+GET {{baseUrl}}/users?is_active=true&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 5. Get All Users (with sorting)
+GET {{baseUrl}}/users?sort_by=email&sort_order=ASC&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 6. Get Single User by ID
+GET {{baseUrl}}/users/1
+Authorization: Bearer {{token}}
+
+### 7. Create New User
+POST {{baseUrl}}/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "newuser@demo.test",
+  "password": "NewUser@123",
+  "name": "مستخدم جديد",
+  "phone": "+9647501234567",
+  "role": "viewer",
+  "is_active": true
+}
+
+### 8. Update User
+PUT {{baseUrl}}/users/2
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "مدير محدث",
+  "phone": "+9647509876543"
+}
+
+### 9. Update User Role (admin only)
+PUT {{baseUrl}}/users/3
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "role": "manager"
+}
+
+### 10. Update User Permissions
+PUT {{baseUrl}}/users/3/permissions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "permissions": [
+    "users.read",
+    "employees.read",
+    "employees.create",
+    "devices.read",
+    "attendance.read"
+  ]
+}
+
+### 11. Activate User Account
+POST {{baseUrl}}/users/3/activate
+Authorization: Bearer {{token}}
+
+### 12. Deactivate User Account
+POST {{baseUrl}}/users/3/deactivate
+Authorization: Bearer {{token}}
+
+### 13. Delete User (soft delete)
+DELETE {{baseUrl}}/users/4
+Authorization: Bearer {{token}}
+
+### 14. Create User - Validation Error (weak password)
+POST {{baseUrl}}/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "test@demo.test",
+  "password": "123",
+  "name": "تست مستخدم",
+  "role": "viewer"
+}
+
+### 15. Create User - Duplicate Email Error
+POST {{baseUrl}}/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "admin@demo.test",
+  "password": "Admin@123",
+  "name": "مكرر مستخدم",
+  "role": "viewer"
+}
+###############################################
+### Employees Management API Tests
+###############################################
+
+### 1. Get Employee Statistics
+GET {{baseUrl}}/employees/stats/overview
+Authorization: Bearer {{token}}
+
+### 2. Get Departments List
+GET {{baseUrl}}/employees/departments/list
+Authorization: Bearer {{token}}
+
+### 3. Get All Employees (with pagination)
+GET {{baseUrl}}/employees?page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 4. Get All Employees (with search)
+GET {{baseUrl}}/employees?search=محمد&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 5. Get All Employees (filter by department)
+GET {{baseUrl}}/employees?department=IT&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 6. Get All Employees (filter by active status)
+GET {{baseUrl}}/employees?is_active=true&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 7. Get All Employees (with sorting)
+GET {{baseUrl}}/employees?sort_by=name&sort_order=ASC&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 8. Get Single Employee by ID
+GET {{baseUrl}}/employees/1
+Authorization: Bearer {{token}}
+
+### 9. Get Employee Biometrics
+GET {{baseUrl}}/employees/1/biometrics
+Authorization: Bearer {{token}}
+
+### 10. Create New Employee
+POST {{baseUrl}}/employees
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "employee_no": "EMP001",
+  "name": "Ahmed Mohammed",
+  "name_ar": "أحمد محمد",
+  "email": "ahmed.mohammed@company.test",
+  "phone": "+9647501234567",
+  "department": "IT",
+  "position": "Software Developer",
+  "hire_date": "2024-01-15",
+  "notes": "موظف جديد في قسم تقنية المعلومات"
+}
+
+### 11. Create Another Employee
+POST {{baseUrl}}/employees
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "employee_no": "EMP002",
+  "name": "Sara Ali",
+  "name_ar": "سارة علي",
+  "email": "sara.ali@company.test",
+  "phone": "+9647509876543",
+  "department": "HR",
+  "position": "HR Manager",
+  "hire_date": "2023-06-01"
+}
+
+### 12. Update Employee
+PUT {{baseUrl}}/employees/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Ahmed Mohammed Updated",
+  "phone": "+9647501111111",
+  "position": "Senior Software Developer"
+}
+
+### 13. Update Employee Department
+PUT {{baseUrl}}/employees/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "department": "Development",
+  "notes": "تم نقله إلى قسم التطوير"
+}
+
+### 14. Deactivate Employee
+POST {{baseUrl}}/employees/1/deactivate
+Authorization: Bearer {{token}}
+
+### 15. Activate Employee
+POST {{baseUrl}}/employees/1/activate
+Authorization: Bearer {{token}}
+
+### 16. Delete Employee (soft delete)
+DELETE {{baseUrl}}/employees/2
+Authorization: Bearer {{token}}
+
+### 17. Create Employee - Validation Error (missing required fields)
+POST {{baseUrl}}/employees
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Test Employee"
+}
+
+### 18. Create Employee - Duplicate employee_no Error
+POST {{baseUrl}}/employees
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "employee_no": "EMP001",
+  "name": "Duplicate Employee",
+  "department": "Test"
+}

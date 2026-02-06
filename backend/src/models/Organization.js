@@ -17,10 +17,6 @@ class Organization extends Model {
             len: [2, 255],
           },
         },
-        name_ar: {
-          type: DataTypes.STRING(255),
-          allowNull: true,
-        },
         email: {
           type: DataTypes.STRING(255),
           allowNull: false,
@@ -38,10 +34,6 @@ class Organization extends Model {
         },
         address: {
           type: DataTypes.TEXT,
-          allowNull: true,
-        },
-        logo_url: {
-          type: DataTypes.STRING(500),
           allowNull: true,
         },
         subscription_plan: {
