@@ -25,6 +25,7 @@ import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import employeeRoutes from './routes/employeeRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
+import organizationRoutes from './routes/organizationRoutes.js';
 // ... etc
 
 // Create Express app
@@ -102,6 +103,7 @@ app.get('/api', (req, res) => {
       users: '/api/users',
       employees: '/api/employees',
       devices: '/api/devices',
+      organizations: '/api/organizations',
       doors: '/api/doors',
       attendance: '/api/attendance',
       reports: '/api/reports'
@@ -124,6 +126,9 @@ app.use('/api/employees', employeeRoutes);
 
 // Device routes
 app.use('/api/devices', deviceRoutes);
+
+// Organization routes
+app.use('/api/organizations', organizationRoutes);
 
 // Door routes
 // app.use('/api/doors', doorRoutes);
