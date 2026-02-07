@@ -513,3 +513,46 @@ export async function updateOrganizationSettings(userId, organizationId, setting
     settings: updatedSettings
   };
 }
+
+/**
+ * Update organization logo
+ */
+export async function updateOrganizationLogo(userId, organizationId, logoUrl) {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new AppError('المستخدم غير موجود', 404);
+  }
+
+  const organization = await Organization.findByPk(organizationId);
+  if (!organization) {
+    throw new AppError('المؤسسة غير موجودة', 404);
+  }
+
+  // Authorization: super_admin or admin of same organization
+  if (user.role !== 'super_admin') {
+    if (user.role !== 'admin' || user.organization_id !== organizationId) {
+      throw new AppError('غير مصرح - يمكنك فقط تحديث شعار مؤسستك', 403);
+    }
+  }
+
+  // If removing logo, delete old file
+  if (!logoUrl && organization.logo_url) {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const { dirname } = await import('path');
+    
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const oldLogoPath = path.join(__dirname, '../..', organization.logo_url);
+    
+    if (fs.existsSync(oldLogoPath)) {
+      fs.unlinkSync(oldLogoPath);
+    }
+  }
+
+  // Update organization logo
+  await organization.update({ logo_url: logoUrl });
+
+  return await getOrganizationById(userId, organizationId);
+}

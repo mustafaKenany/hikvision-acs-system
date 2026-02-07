@@ -15,6 +15,8 @@ import {
   updateSubscriptionValidator,
   updateSettingsValidator
 } from '../validators/organizationValidator.js';
+import { uploadOrganizationLogo as uploadLogo, setUploadPath } from '../middlewares/upload.js';
+import { processOrganizationLogoMiddleware } from '../middlewares/imageProcessor.js';
 
 const router = express.Router();
 
@@ -154,6 +156,44 @@ router.delete(
   authorize(['super_admin']),
   organizationIdValidator,
   organizationController.deleteOrganization
+);
+
+/**
+ * @route   POST /api/organizations/:id/logo
+ * @desc    Upload organization logo
+ * @access  Private - Super Admin or Admin
+ */
+router.post(
+  '/:id/logo',
+  authorize(['super_admin', 'admin']),
+  organizationIdValidator,
+  setUploadPath('organizations/logos'),
+  uploadLogo,
+  processOrganizationLogoMiddleware,
+  organizationController.uploadOrganizationLogo
+);
+
+/**
+ * @route   GET /api/organizations/:id/logo
+ * @desc    Get organization logo
+ * @access  Private
+ */
+router.get(
+  '/:id/logo',
+  organizationIdValidator,
+  organizationController.getOrganizationLogo
+);
+
+/**
+ * @route   DELETE /api/organizations/:id/logo
+ * @desc    Delete organization logo
+ * @access  Private - Super Admin or Admin
+ */
+router.delete(
+  '/:id/logo',
+  authorize(['super_admin', 'admin']),
+  organizationIdValidator,
+  organizationController.deleteOrganizationLogo
 );
 
 export default router;

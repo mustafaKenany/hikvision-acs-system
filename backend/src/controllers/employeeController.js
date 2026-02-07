@@ -1,6 +1,14 @@
 import asyncHandler from '../middlewares/asyncHandler.js';
 import { success } from '../utils/response.js';
+import { AppError } from '../middlewares/errorHandler.js';
 import * as employeeService from '../services/employeeService.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * @desc    Get all employees
@@ -150,4 +158,75 @@ export const getEmployeeStats = asyncHandler(async (req, res) => {
   const stats = await employeeService.getEmployeeStats(userId);
   
   success(res, stats, 'تم جلب الإحصائيات بنجاح', 200);
+});
+
+/**
+ * @desc    Upload employee photo
+ * @route   POST /api/employees/:id/photo
+ * @access  Private (admin+, employees.update)
+ */
+export const uploadEmployeePhoto = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const employeeId = req.params.id;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  if (!req.processedFile) {
+    throw new AppError('فشل في معالجة الصورة', 500);
+  }
+
+  // Build relative URL for photo
+  const photoUrl = `/uploads/employees/photos/${req.processedFile.filename}`;
+
+  const employee = await employeeService.updateEmployeePhoto(
+    userId, 
+    employeeId, 
+    photoUrl,
+    ipAddress
+  );
+
+  success(res, employee, 'تم رفع صورة الموظف بنجاح', 200);
+});
+
+/**
+ * @desc    Get employee photo
+ * @route   GET /api/employees/:id/photo
+ * @access  Private (admin+, manager+, employees.read)
+ */
+export const getEmployeePhoto = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const employeeId = req.params.id;
+
+  const employee = await employeeService.getEmployeeById(userId, employeeId);
+
+  if (!employee.photo_url) {
+    throw new AppError('لا توجد صورة لهذا الموظف', 404);
+  }
+
+  const photoPath = path.join(__dirname, '../..', employee.photo_url);
+
+  if (!fs.existsSync(photoPath)) {
+    throw new AppError('الصورة غير موجودة', 404);
+  }
+
+  res.sendFile(photoPath);
+});
+
+/**
+ * @desc    Delete employee photo
+ * @route   DELETE /api/employees/:id/photo
+ * @access  Private (admin+, employees.delete)
+ */
+export const deleteEmployeePhoto = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const employeeId = req.params.id;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  const employee = await employeeService.updateEmployeePhoto(
+    userId,
+    employeeId,
+    null,
+    ipAddress
+  );
+
+  success(res, employee, 'تم حذف صورة الموظف بنجاح', 200);
 });

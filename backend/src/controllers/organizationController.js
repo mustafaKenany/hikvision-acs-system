@@ -6,6 +6,14 @@
 import * as organizationService from '../services/organizationService.js';
 import { success } from '../utils/response.js';
 import asyncHandler from '../middlewares/asyncHandler.js';
+import { AppError } from '../middlewares/errorHandler.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class OrganizationController {
   /**
@@ -158,6 +166,62 @@ class OrganizationController {
     const result = await organizationService.updateOrganizationSettings(userId, organizationId, settings);
 
     return success(res, result, 'تم تحديث إعدادات المؤسسة بنجاح', 200);
+  });
+
+  /**
+   * POST /api/organizations/:id/logo
+   * Upload organization logo
+   */
+  uploadOrganizationLogo = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const organizationId = parseInt(req.params.id);
+
+    if (!req.processedFile) {
+      throw new AppError('فشل في معالجة الشعار', 500);
+    }
+
+    // Build relative URL for logo
+    const logoUrl = `/uploads/organizations/logos/${req.processedFile.filename}`;
+
+    const result = await organizationService.updateOrganizationLogo(userId, organizationId, logoUrl);
+
+    return success(res, result, 'تم رفع شعار المؤسسة بنجاح', 200);
+  });
+
+  /**
+   * GET /api/organizations/:id/logo
+   * Get organization logo
+   */
+  getOrganizationLogo = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const organizationId = parseInt(req.params.id);
+
+    const organization = await organizationService.getOrganizationById(userId, organizationId);
+
+    if (!organization.logo_url) {
+      throw new AppError('لا يوجد شعار لهذه المؤسسة', 404);
+    }
+
+    const logoPath = path.join(__dirname, '../..', organization.logo_url);
+
+    if (!fs.existsSync(logoPath)) {
+      throw new AppError('الشعار غير موجود', 404);
+    }
+
+    res.sendFile(logoPath);
+  });
+
+  /**
+   * DELETE /api/organizations/:id/logo
+   * Delete organization logo
+   */
+  deleteOrganizationLogo = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const organizationId = parseInt(req.params.id);
+
+    const result = await organizationService.updateOrganizationLogo(userId, organizationId, null);
+
+    return success(res, result, 'تم حذف شعار المؤسسة بنجاح', 200);
   });
 }
 

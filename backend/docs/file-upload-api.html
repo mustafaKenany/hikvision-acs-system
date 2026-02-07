@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload System API Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 3rem;
+        }
+        
+        .section {
+            margin-bottom: 3rem;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .section h3 {
+            color: #764ba2;
+            font-size: 1.3rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .endpoint {
+            background: #f8f9fa;
+            border-right: 4px solid #667eea;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+        }
+        
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .method {
+            display: inline-block;
+            padding: 0.4rem 1rem;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+        
+        .method.post {
+            background: #28a745;
+            color: white;
+        }
+        
+        .method.get {
+            background: #007bff;
+            color: white;
+        }
+        
+        .method.delete {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .url {
+            font-family: 'Courier New', monospace;
+            background: #e9ecef;
+            padding: 0.4rem 1rem;
+            border-radius: 6px;
+            flex: 1;
+        }
+        
+        .description {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+        
+        .params, .response {
+            margin-top: 1rem;
+        }
+        
+        .params h4, .response h4 {
+            color: #495057;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+        
+        .params ul {
+            margin-right: 1.5rem;
+        }
+        
+        .params li {
+            margin-bottom: 0.5rem;
+            color: #666;
+        }
+        
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-top: 0.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            direction: ltr;
+            text-align: left;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-right: 4px solid #007bff;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .warning-box {
+            background: #fff3cd;
+            border-right: 4px solid #ffc107;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .success-box {
+            background: #d4edda;
+            border-right: 4px solid #28a745;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        
+        table th, table td {
+            padding: 0.75rem;
+            text-align: right;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        table th {
+            background: #f8f9fa;
+            color: #495057;
+            font-weight: bold;
+        }
+        
+        table tr:hover {
+            background: #f1f3f5;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        
+        .badge.required {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .badge.optional {
+            background: #6c757d;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📁 File Upload System API</h1>
+            <p>نظام رفع الملفات - صور الموظفين وشعارات المؤسسات</p>
+            <p style="font-size: 0.9rem; opacity: 0.8;">February 7, 2026</p>
+        </div>
+        
+        <div class="content">
+            <!-- Overview -->
+            <div class="section">
+                <h2>📖 نظرة عامة</h2>
+                <p>نظام رفع الملفات يتيح رفع صور الموظفين (للتعرف على الوجه) وشعارات المؤسسات. يدعم النظام معالجة الصور تلقائياً بما في ذلك تغيير الحجم والضغط والتحويل للصيغ المناسبة.</p>
+                
+                <div class="info-box">
+                    <strong>🔒 التوثيق:</strong> جميع الطلبات تتطلب Bearer Token في الهيدر
+                </div>
+                
+                <div class="warning-box">
+                    <strong>⚠️ الصلاحيات:</strong>
+                    <ul style="margin-right: 1.5rem; margin-top: 0.5rem;">
+                        <li>رفع صور الموظفين: admin+ أو صلاحية employees.update</li>
+                        <li>رفع شعارات المؤسسات: super_admin أو admin لنفس المؤسسة</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Technical Specs -->
+            <div class="section">
+                <h2>⚙️ المواصفات التقنية</h2>
+                
+                <h3>📦 البنية التحتية</h3>
+                <table>
+                    <tr>
+                        <th>المكون</th>
+                        <th>التقنية</th>
+                        <th>الوصف</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Multer</strong></td>
+                        <td>v1.4.5-lts.1</td>
+                        <td>معالجة multipart/form-data</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sharp</strong></td>
+                        <td>v0.33.5</td>
+                        <td>معالجة وضغط الصور</td>
+                    </tr>
+                    <tr>
+                        <td><strong>التخزين</strong></td>
+                        <td>Local Disk</td>
+                        <td>uploads/ directory</td>
+                    </tr>
+                </table>
+
+                <h3>📏 حدود الملفات</h3>
+                <table>
+                    <tr>
+                        <th>نوع الملف</th>
+                        <th>الحد الأقصى</th>
+                        <th>الصيغ المدعومة</th>
+                        <th>المعالجة</th>
+                    </tr>
+                    <tr>
+                        <td>صور الموظفين</td>
+                        <td>5 MB</td>
+                        <td>JPEG, PNG, GIF</td>
+                        <td>تحويل لـ JPEG 400x400</td>
+                    </tr>
+                    <tr>
+                        <td>شعارات المؤسسات</td>
+                        <td>2 MB</td>
+                        <td>JPEG, PNG, GIF</td>
+                        <td>تحويل لـ PNG 300x300</td>
+                    </tr>
+                    <tr>
+                        <td>ملفات CSV</td>
+                        <td>10 MB</td>
+                        <td>CSV</td>
+                        <td>بدون معالجة</td>
+                    </tr>
+                    <tr>
+                        <td>مستندات</td>
+                        <td>10 MB × 5 ملفات</td>
+                        <td>PDF, DOC, DOCX</td>
+                        <td>بدون معالجة</td>
+                    </tr>
+                </table>
+
+                <h3>🖼️ معالجة الصور</h3>
+                <div class="code-block">
+{
+  "employeePhoto": {
+    "dimensions": "400x400",
+    "format": "JPEG",
+    "quality": 85,
+    "fit": "cover",
+    "purpose": "Face recognition optimization"
+  },
+  "organizationLogo": {
+    "dimensions": "300x300",
+    "format": "PNG",
+    "background": "transparent",
+    "fit": "contain",
+    "purpose": "Professional branding"
+  }
+}</div>
+            </div>
+
+            <!-- Employee Photo Endpoints -->
+            <div class="section">
+                <h2>👤 صور الموظفين</h2>
+                
+                <!-- Upload Employee Photo -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="url">/api/employees/:id/photo</span>
+                    </div>
+                    <p class="description">رفع صورة موظف (للتعرف على الوجه)</p>
+                    
+                    <div class="params">
+                        <h4>📥 Parameters</h4>
+                        <ul>
+                            <li><strong>:id</strong> <span class="badge required">مطلوب</span> - معرف الموظف</li>
+                            <li><strong>photo</strong> <span class="badge required">مطلوب</span> - ملف الصورة (multipart/form-data)</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="response">
+                        <h4>📤 Response (200 OK)</h4>
+                        <div class="code-block">{
+  "success": true,
+  "message": "تم رفع صورة الموظف بنجاح",
+  "data": {
+    "id": 1,
+    "name": "Ahmed Mohammed",
+    "employee_no": "EMP001",
+    "photo_url": "/uploads/employees/photos/processed-1234567890.jpg",
+    "department": "IT",
+    "position": "Developer"
+  }
+}</div>
+                    </div>
+
+                    <div class="info-box">
+                        <strong>💡 ملاحظات:</strong>
+                        <ul style="margin-right: 1.5rem; margin-top: 0.5rem;">
+                            <li>الصورة تُعالج تلقائياً: تحويل لحجم 400x400، صيغة JPEG، جودة 85%</li>
+                            <li>الصورة القديمة تُحذف تلقائياً عند رفع صورة جديدة</li>
+                            <li>يُسجل الإجراء في AuditLog</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Get Employee Photo -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="url">/api/employees/:id/photo</span>
+                    </div>
+                    <p class="description">الحصول على صورة موظف</p>
+                    
+                    <div class="params">
+                        <h4>📥 Parameters</h4>
+                        <ul>
+                            <li><strong>:id</strong> <span class="badge required">مطلوب</span> - معرف الموظف</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="response">
+                        <h4>📤 Response</h4>
+                        <ul>
+                            <li><strong>200 OK:</strong> ملف الصورة (Content-Type: image/jpeg)</li>
+                            <li><strong>404 Not Found:</strong> "لا توجد صورة لهذا الموظف"</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Delete Employee Photo -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method delete">DELETE</span>
+                        <span class="url">/api/employees/:id/photo</span>
+                    </div>
+                    <p class="description">حذف صورة موظف</p>
+                    
+                    <div class="params">
+                        <h4>📥 Parameters</h4>
+                        <ul>
+                            <li><strong>:id</strong> <span class="badge required">مطلوب</span> - معرف الموظف</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="response">
+                        <h4>📤 Response (200 OK)</h4>
+                        <div class="code-block">{
+  "success": true,
+  "message": "تم حذف صورة الموظف بنجاح",
+  "data": {
+    "id": 1,
+    "name": "Ahmed Mohammed",
+    "photo_url": null
+  }
+}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Organization Logo Endpoints -->
+            <div class="section">
+                <h2>🏢 شعارات المؤسسات</h2>
+                
+                <!-- Upload Organization Logo -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="url">/api/organizations/:id/logo</span>
+                    </div>
+                    <p class="description">رفع شعار مؤسسة</p>
+                    
+                    <div class="params">
+                        <h4>📥 Parameters</h4>
+                        <ul>
+                            <li><strong>:id</strong> <span class="badge required">مطلوب</span> - معرف المؤسسة</li>
+                            <li><strong>logo</strong> <span class="badge required">مطلوب</span> - ملف الشعار (multipart/form-data)</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="response">
+                        <h4>📤 Response (200 OK)</h4>
+                        <div class="code-block">{
+  "success": true,
+  "message": "تم رفع شعار المؤسسة بنجاح",
+  "data": {
+    "id": 1,
+    "name": "شركة النظام التجريبية",
+    "logo_url": "/uploads/organizations/logos/logo-1234567890.png",
+    "subscription_plan": "pro",
+    "is_active": true
+  }
+}</div>
+                    </div>
+
+                    <div class="info-box">
+                        <strong>💡 ملاحظات:</strong>
+                        <ul style="margin-right: 1.5rem; margin-top: 0.5rem;">
+                            <li>الشعار يُعالج تلقائياً: تحويل لحجم 300x300، صيغة PNG مع شفافية</li>
+                            <li>super_admin يمكنه رفع شعار لأي مؤسسة</li>
+                            <li>admin يمكنه رفع شعار لمؤسسته فقط</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Get Organization Logo -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="url">/api/organizations/:id/logo</span>
+                    </div>
+                    <p class="description">الحصول على شعار مؤسسة</p>
+                    
+                    <div class="params">
+                        <h4>📥 Parameters</h4>
+                        <ul>
+                            <li><strong>:id</strong> <span class="badge required">مطلوب</span> - معرف المؤسسة</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="response">
+                        <h4>📤 Response</h4>
+                        <ul>
+                        <li><strong>200 OK:</strong> ملف الشعار (Content-Type: image/png)</li>
+                            <li><strong>404 Not Found:</strong> "لا يوجد شعار لهذه المؤسسة"</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Delete Organization Logo -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method delete">DELETE</span>
+                        <span class="url">/api/organizations/:id/logo</span>
+                    </div>
+                    <p class="description">حذف شعار مؤسسة</p>
+                    
+                    <div class="params">
+                        <h4>📥 Parameters</h4>
+                        <ul>
+                            <li><strong>:id</strong> <span class="badge required">مطلوب</span> - معرف المؤسسة</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="response">
+                        <h4>📤 Response (200 OK)</h4>
+                        <div class="code-block">{
+  "success": true,
+  "message": "تم حذف شعار المؤسسة بنجاح",
+  "data": {
+    "id": 1,
+    "name": "شركة النظام التجريبية",
+    "logo_url": null
+  }
+}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Code Examples -->
+            <div class="section">
+                <h2>💻 أمثلة برمجية</h2>
+                
+                <h3>JavaScript (Axios)</h3>
+                <div class="code-block">// رفع صورة موظف
+const formData = new FormData();
+formData.append('photo', fileInput.files[0]);
+
+const response = await axios.post(
+  'http://localhost:3000/api/employees/1/photo',
+  formData,
+  {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  }
+);
+
+console.log('Photo uploaded:', response.data.data.photo_url);</div>
+
+                <h3>cURL</h3>
+                <div class="code-block">curl -X POST \
+  http://localhost:3000/api/employees/1/photo \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "photo=@employee-photo.jpg"</div>
+
+                <h3>Node.js (form-data)</h3>
+                <div class="code-block">import FormData from 'form-data';
+import fs from 'fs';
+import axios from 'axios';
+
+const form = new FormData();
+form.append('logo', fs.createReadStream('company-logo.png'));
+
+const response = await axios.post(
+  'http://localhost:3000/api/organizations/1/logo',
+  form,
+  {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      ...form.getHeaders()
+    }
+  }
+);</div>
+            </div>
+
+            <!-- Error Handling -->
+            <div class="section">
+                <h2>⚠️ معالجة الأخطاء</h2>
+                
+                <h3>أكواد الأخطاء الشائعة</h3>
+                <table>
+                    <tr>
+                        <th>الكود</th>
+                        <th>الخطأ</th>
+                        <th>الحل</th>
+                    </tr>
+                    <tr>
+                        <td><strong>400</strong></td>
+                        <td>لم يتم إرفاق ملف</td>
+                        <td>تأكد من إرسال الملف في حقل 'photo' أو 'logo'</td>
+                    </tr>
+                    <tr>
+                        <td><strong>400</strong></td>
+                        <td>نوع الملف غير مدعوم</td>
+                        <td>استخدم JPEG, PNG, أو GIF فقط</td>
+                    </tr>
+                    <tr>
+                        <td><strong>400</strong></td>
+                        <td>حجم الملف كبير جداً</td>
+                        <td>تأكد من أن الملف أقل من الحد المسموح</td>
+                    </tr>
+                    <tr>
+                        <td><strong>401</strong></td>
+                        <td>غير موثق</td>
+                        <td>أرسل Bearer Token صحيح في الهيدر</td>
+                    </tr>
+                    <tr>
+                        <td><strong>403</strong></td>
+                        <td>غير مصرح</td>
+                        <td>تحقق من صلاحياتك (admin أو employees.update)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>404</strong></td>
+                        <td>الموظف/المؤسسة غير موجود</td>
+                        <td>تأكد من صحة المعرف (ID)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>500</strong></td>
+                        <td>فشل معالجة الصورة</td>
+                        <td>تأكد من أن الصورة صالحة وليست تالفة</td>
+                    </tr>
+                </table>
+
+                <h3>مثال على رسالة خطأ</h3>
+                <div class="code-block">{
+  "success": false,
+  "message": "نوع الملف غير مدعوم",
+  "errors": [
+    {
+      "field": "photo",
+      "message": "يجب أن يكون الملف من نوع JPEG, PNG, GIF"
+    }
+  ]
+}</div>
+            </div>
+
+            <!-- Security -->
+            <div class="section">
+                <h2>🔐 الأمان</h2>
+                
+                <div class="success-box">
+                    <strong>✔️ إجراءات الأمان المُطبقة:</strong>
+                    <ul style="margin-right: 1.5rem; margin-top: 0.5rem;">
+                        <li><strong>Whitelist للأنواع:</strong> فقط JPEG, PNG, GIF, PDF, DOC, CSV مسموح</li>
+                        <li><strong>حدود الحجم:</strong> منع رفع ملفات ضخمة (2-10 MB حسب النوع)</li>
+                        <li><strong>تنظيف أسماء الملفات:</strong> إزالة محارف خطيرة ومنع path traversal</li>
+                        <li><strong>التوثيق:</strong> جميع الطلبات تتطلب JWT token</li>
+                        <li><strong>الصلاحيات:</strong> التحقق من role وorganization_id</li>
+                        <li><strong>Audit Logging:</strong> تسجيل جميع عمليات الرفع والحذف</li>
+                        <li><strong>معالجة آمنة:</strong> استخدام Sharp لفحص ومعالجة الصور</li>
+                    </ul>
+                </div>
+
+                <div class="warning-box">
+                    <strong>⚠️ تحذيرات:</strong>
+                    <ul style="margin-right: 1.5rem; margin-top: 0.5rem;">
+                        <li>لا ترفع ملفات من مصادر غير موثوقة</li>
+                        <li>تحقق من صحة الملفات قبل الإرسال</li>
+                        <li>استخدم HTTPS في الإنتاج لحماية البيانات</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- File Structure -->
+            <div class="section">
+                <h2>📂 هيكل الملفات</h2>
+                <div class="code-block">hikvision-acs-system/backend/
+├── src/
+│   ├── middlewares/
+│   │   ├── upload.js              # Multer configuration
+│   │   ├── imageProcessor.js      # Sharp image processing
+│   │   └── fileValidator.js       # File validation utilities
+│   ├── controllers/
+│   │   ├── employeeController.js  # Photo upload handlers
+│   │   └── organizationController.js  # Logo upload handlers
+│   ├── services/
+│   │   ├── employeeService.js     # Photo business logic
+│   │   └── organizationService.js # Logo business logic
+│   ├── routes/
+│   │   ├── employeeRoutes.js      # Photo endpoints
+│   │   └── organizationRoutes.js  # Logo endpoints
+│   └── models/
+│       ├── Employee.js            # photo_url field
+│       └── Organization.js        # logo_url field
+└── uploads/
+    ├── employees/
+    │   └── photos/                # Employee photos (400x400 JPEG)
+    ├── organizations/
+    │   └── logos/                 # Organization logos (300x300 PNG)
+    ├── documents/                 # Document uploads
+    ├── csv/                       # CSV bulk imports
+    └── temp/                      # Temporary files</div>
+            </div>
+
+            <!-- Testing -->
+            <div class="section">
+                <h2>🧪 الاختبار</h2>
+                
+                <div class="success-box">
+                    <strong>✅ نتائج الاختبار:</strong><br>
+                    تم اختبار النظام بنجاح مع <strong>6/6 اختبارات ناجحة</strong>:
+                    <ul style="margin-right: 1.5rem; margin-top: 0.5rem;">
+                        <li>✅ Test 1: تسجيل دخول</li>
+                        <li>✅ Test 2: إنشاء صورة اختبار</li>
+                        <li>✅ Test 3: رفع صورة موظف</li>
+                        <li>✅ Test 4: الحصول على صورة موظف</li>
+                        <li>✅ Test 5: رفع شعار مؤسسة</li>
+                        <li>✅ Test 6: الحصول على شعار مؤسسة</li>
+                    </ul>
+                </div>
+
+                <h3>تشغيل الاختبارات</h3>
+                <div class="code-block">cd backend
+node test-file-upload.js</div>
+            </div>
+
+            <!-- Footer -->
+            <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 10px; margin-top: 3rem;">
+                <p style="color: #666;">📅 آخر تحديث: February 7, 2026</p>
+                <p style="color: #666;">🚀 File Upload System v1.0.0</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

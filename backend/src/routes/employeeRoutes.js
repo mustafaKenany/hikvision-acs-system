@@ -18,8 +18,13 @@ import {
   deactivateEmployee,
   getEmployeeBiometrics,
   getDepartments,
-  getEmployeeStats
+  getEmployeeStats,
+  uploadEmployeePhoto,
+  getEmployeePhoto,
+  deleteEmployeePhoto
 } from '../controllers/employeeController.js';
+import { setUploadPath, uploadEmployeePhoto as uploadPhoto } from '../middlewares/upload.js';
+import { processEmployeePhotoMiddleware } from '../middlewares/imageProcessor.js';
 
 const router = express.Router();
 
@@ -143,6 +148,45 @@ router.delete(
   employeeIdValidator,
   authorize(['super_admin', 'admin'], ['employees.delete']),
   deleteEmployee
+);
+
+/**
+ * @route   POST /api/employees/:id/photo
+ * @desc    Upload employee photo
+ * @access  Private (admin+, employees.update)
+ */
+router.post(
+  '/:id/photo',
+  employeeIdValidator,
+  authorize(['super_admin', 'admin'], ['employees.update']),
+  setUploadPath('employees/photos'),
+  uploadPhoto,
+  processEmployeePhotoMiddleware,
+  uploadEmployeePhoto
+);
+
+/**
+ * @route   GET /api/employees/:id/photo
+ * @desc    Get employee photo
+ * @access  Private (admin+, manager+, employees.read)
+ */
+router.get(
+  '/:id/photo',
+  employeeIdValidator,
+  authorize(['super_admin', 'admin', 'manager'], ['employees.read']),
+  getEmployeePhoto
+);
+
+/**
+ * @route   DELETE /api/employees/:id/photo
+ * @desc    Delete employee photo
+ * @access  Private (admin+, employees.delete)
+ */
+router.delete(
+  '/:id/photo',
+  employeeIdValidator,
+  authorize(['super_admin', 'admin'], ['employees.delete']),
+  deleteEmployeePhoto
 );
 
 export default router;

@@ -73,6 +73,11 @@ class Organization extends Model {
           type: DataTypes.JSONB,
           defaultValue: {},
         },
+        logo_url: {
+          type: DataTypes.STRING(500),
+          allowNull: true,
+          comment: 'URL of organization logo image',
+        },
         created_at: {
           type: DataTypes.DATE,
           allowNull: false,

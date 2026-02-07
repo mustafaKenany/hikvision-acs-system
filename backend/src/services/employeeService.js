@@ -583,3 +583,66 @@ export async function getEmployeeStats(userId) {
     departments_count: departments
   };
 }
+
+/**
+ * Update employee photo
+ */
+export async function updateEmployeePhoto(userId, employeeId, photoUrl, ipAddress) {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new AppError('المستخدم غير موجود', 404);
+  }
+
+  // Check if user can update employee
+  const employee = await Employee.findByPk(employeeId);
+  if (!employee) {
+    throw new AppError('الموظف غير موجود', 404);
+  }
+
+  // Authorization: super_admin or same organization admin/manager
+  if (user.role !== 'super_admin') {
+    if (user.organization_id !== employee.organization_id) {
+      throw new AppError('غير مصرح - يمكنك فقط تعديل موظفي مؤسستك', 403);
+    }
+    if (!['admin', 'manager'].includes(user.role)) {
+      throw new AppError('غير مصرح - صلاحيات غير كافية', 403);
+    }
+  }
+
+  // If removing photo, delete old file
+  if (!photoUrl && employee.photo_url) {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const { dirname } = await import('path');
+    
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const oldPhotoPath = path.join(__dirname, '../..', employee.photo_url);
+    
+    if (fs.existsSync(oldPhotoPath)) {
+      fs.unlinkSync(oldPhotoPath);
+    }
+  }
+
+  // Update employee photo
+  await employee.update({ photo_url: photoUrl });
+
+  // Log the action
+  await AuditLog.create({
+    user_id: userId,
+    organization_id: user.organization_id,
+    action: photoUrl ? 'update' : 'delete',
+    resource_type: 'employee',
+    resource_id: employeeId,
+    description: photoUrl ? `تحميل صورة للموظف ${employee.name}` : `حذف صورة الموظف ${employee.name}`,
+    details: {
+      employee_id: employee.id,
+      employee_name: employee.name,
+      photo_url: photoUrl
+    },
+    ip_address: ipAddress
+  });
+
+  return await getEmployeeById(userId, employeeId);
+}
