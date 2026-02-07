@@ -153,7 +153,7 @@ class OrganizationController {
   updateOrganizationSettings = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const organizationId = parseInt(req.params.id);
-    const settings = req.body;
+    const { settings } = req.body;
 
     const result = await organizationService.updateOrganizationSettings(userId, organizationId, settings);
 

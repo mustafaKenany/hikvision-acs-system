@@ -248,9 +248,64 @@ async function testUpdateSubscription(orgId) {
   }
 }
 
-// Test 8: POST /api/organizations/:id/deactivate
+// Test 8: GET /api/organizations/:id/settings (Get Settings)
+async function testGetSettings(orgId) {
+  console.log(`\n⚙️  Test 8: GET /api/organizations/${orgId}/settings (Get Settings)`);
+  console.log('═'.repeat(50));
+  
+  try {
+    const result = await apiCall('GET', `/api/organizations/${orgId}/settings`);
+
+    if (result.ok) {
+      console.log('✅ SUCCESS!');
+      console.log(`   Settings: ${JSON.stringify(result.data.data || {})}`);
+      return true;
+    } else {
+      console.log('❌ FAILED:', result.data.message);
+      return false;
+    }
+  } catch (error) {
+    console.log('❌ ERROR:', error.message);
+    return false;
+  }
+}
+
+// Test 9: PUT /api/organizations/:id/settings (Update Settings)
+async function testUpdateSettings(orgId) {
+  console.log(`\n⚙️  Test 9: PUT /api/organizations/${orgId}/settings (Update Settings)`);
+  console.log('═'.repeat(50));
+  
+  const settings = {
+    theme: 'dark',
+    language: 'ar',
+    timezone: 'Asia/Baghdad',
+    notifications: {
+      email: true,
+      sms: false
+    }
+  };
+
+  try {
+    const result = await apiCall('PUT', `/api/organizations/${orgId}/settings`, { settings });
+
+    if (result.ok) {
+      console.log('✅ SUCCESS!');
+      console.log(`   Theme: ${result.data.data.settings?.theme || 'N/A'}`);
+      console.log(`   Language: ${result.data.data.settings?.language || 'N/A'}`);
+      return true;
+    } else {
+      console.log('❌ FAILED:', result.data.message);
+      return false;
+    }
+  } catch (error) {
+    console.log('❌ ERROR:', error.message);
+    return false;
+  }
+}
+
+// Test 10: POST /api/organizations/:id/deactivate
 async function testDeactivateOrganization(orgId) {
-  console.log(`\n🔴 Test 8: POST /api/organizations/${orgId}/deactivate (Deactivate)`);
+  console.log(`\n🔴 Test 10: POST /api/organizations/${orgId}/deactivate (Deactivate)`);
   console.log('═'.repeat(50));
   
   try {
@@ -270,9 +325,9 @@ async function testDeactivateOrganization(orgId) {
   }
 }
 
-// Test 9: POST /api/organizations/:id/activate
+// Test 11: POST /api/organizations/:id/activate
 async function testActivateOrganization(orgId) {
-  console.log(`\n🟢 Test 9: POST /api/organizations/${orgId}/activate (Activate)`);
+  console.log(`\n🟢 Test 11: POST /api/organizations/${orgId}/activate (Activate)`);
   console.log('═'.repeat(50));
   
   try {
@@ -292,9 +347,9 @@ async function testActivateOrganization(orgId) {
   }
 }
 
-// Test 10: DELETE /api/organizations/:id
+// Test 12: DELETE /api/organizations/:id
 async function testDeleteOrganization(orgId) {
-  console.log(`\n🗑️  Test 10: DELETE /api/organizations/${orgId} (Delete)`);
+  console.log(`\n🗑️  Test 12: DELETE /api/organizations/${orgId} (Delete)`);
   console.log('═'.repeat(50));
   
   try {
@@ -318,7 +373,7 @@ async function testDeleteOrganization(orgId) {
 async function runAllTests() {
   console.log('\n╔══════════════════════════════════════════════════╗');
   console.log('║   🧪 ORGANIZATIONS API - COMPREHENSIVE TEST    ║');
-  console.log('║          February 7, 2026                      ║');
+  console.log('║      12 Endpoints - February 7, 2026           ║');
   console.log('╚══════════════════════════════════════════════════╝');
 
   let newOrgId = null;
@@ -342,6 +397,8 @@ async function runAllTests() {
   if (newOrgId) {
     await testUpdateOrganization(newOrgId);
     await testUpdateSubscription(newOrgId);
+    await testGetSettings(newOrgId);
+    await testUpdateSettings(newOrgId);
     await testDeactivateOrganization(newOrgId);
     await testActivateOrganization(newOrgId);
     await testDeleteOrganization(newOrgId);
