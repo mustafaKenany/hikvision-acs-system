@@ -127,6 +127,18 @@ router.get(
 );
 
 /**
+ * @route   POST /api/devices/:id/test-connection
+ * @desc    Test connection to physical device
+ * @access  Private - Admin, Manager
+ */
+router.post(
+  '/:id/test-connection',
+  authorize(['super_admin', 'admin', 'manager']),
+  deviceIdValidator,
+  deviceController.testConnection
+);
+
+/**
  * @route   POST /api/devices/:id/sync
  * @desc    Sync device data with HikVision device
  * @access  Private - Admin, Manager
@@ -136,6 +148,18 @@ router.post(
   authorize(['super_admin', 'admin', 'manager']),
   deviceIdValidator,
   deviceController.syncDevice
+);
+
+/**
+ * @route   POST /api/devices/:id/live-capture/:employeeId
+ * @desc    Activate live face capture mode on device camera
+ * @access  Private - Admin, Manager
+ */
+router.post(
+  '/:id/live-capture/:employeeId',
+  authorize(['super_admin', 'admin', 'manager']),
+  deviceIdValidator,
+  deviceController.activateLiveCapture
 );
 
 export default router;

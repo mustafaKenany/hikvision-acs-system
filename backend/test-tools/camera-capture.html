@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📸 التقاط صورة - Face Recognition Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            aspect-ratio: 4/3;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #canvas {
+            display: none;
+        }
+
+        .preview-container {
+            display: none;
+            position: relative;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            aspect-ratio: 4/3;
+        }
+
+        #preview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(86, 171, 47, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(235, 51, 73, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #757F9A 0%, #D7DDE8 100%);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(117, 127, 154, 0.4);
+        }
+
+        .upload-section {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 2px solid #bee5eb;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .instructions h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .instructions ol {
+            margin-right: 20px;
+            color: #856404;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+        }
+
+        .face-guide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 250px;
+            border: 3px solid #00ff00;
+            border-radius: 50% 50% 45% 45%;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 التقاط صورة الوجه</h1>
+        <p class="subtitle">Face Recognition Test Tool - Hikvision ACS</p>
+
+        <div class="instructions">
+            <h3>📋 التعليمات:</h3>
+            <ol>
+                <li>اضغط "تشغيل الكاميرا" للبدء</li>
+                <li>ضع وجهك داخل الإطار الأخضر</li>
+                <li>اضغط "التقاط صورة" عندما تكون جاهزاً</li>
+                <li>أدخل معلومات تسجيل الدخول</li>
+                <li>اختر الموظف الذي تريد تحديث صورته</li>
+                <li>اضغط "رفع الصورة" لإرسالها للجهاز</li>
+            </ol>
+        </div>
+
+        <div class="video-container" id="videoContainer">
+            <video id="video" autoplay playsinline></video>
+            <div class="face-guide"></div>
+        </div>
+
+        <div class="preview-container" id="previewContainer">
+            <img id="preview" alt="Preview">
+        </div>
+
+        <canvas id="canvas"></canvas>
+
+        <div class="controls">
+            <button id="startBtn" class="btn-primary" onclick="startCamera()">
+                🎥 تشغيل الكاميرا
+            </button>
+            <button id="captureBtn" class="btn-success" onclick="capturePhoto()" disabled>
+                📸 التقاط صورة
+            </button>
+            <button id="retakeBtn" class="btn-secondary" onclick="retakePhoto()" style="display:none;">
+                🔄 إعادة التقاط
+            </button>
+            <button id="uploadBtn" class="btn-primary" onclick="showUploadForm()" style="display:none;">
+                ⬆️ رفع الصورة
+            </button>
+        </div>
+
+        <div class="upload-section" id="uploadSection">
+            <h3 style="margin-bottom: 15px; color: #333;">📤 رفع الصورة للنظام</h3>
+            
+            <div class="form-group">
+                <label>البريد الإلكتروني:</label>
+                <input type="email" id="email" value="admin@demo.test" placeholder="admin@demo.test">
+            </div>
+
+            <div class="form-group">
+                <label>كلمة المرور:</label>
+                <input type="password" id="password" value="Admin@123" placeholder="كلمة المرور">
+            </div>
+
+            <div class="form-group">
+                <label>اختر الموظف:</label>
+                <select id="employeeSelect">
+                    <option value="">جار التحميل...</option>
+                </select>
+            </div>
+
+            <button onclick="uploadPhoto()" class="btn-success" style="width: 100%; margin-top: 10px;">
+                ✅ رفع الصورة الآن
+            </button>
+        </div>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const preview = document.getElementById('preview');
+        const videoContainer = document.getElementById('videoContainer');
+        const previewContainer = document.getElementById('previewContainer');
+        const startBtn = document.getElementById('startBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const retakeBtn = document.getElementById('retakeBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadSection = document.getElementById('uploadSection');
+        const status = document.getElementById('status');
+
+        let stream = null;
+        let capturedBlob = null;
+        let token = null;
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    }
+                });
+
+                video.srcObject = stream;
+                startBtn.disabled = true;
+                captureBtn.disabled = false;
+                showStatus('الكاميرا جاهزة! 📷', 'success');
+            } catch (err) {
+                showStatus('خطأ في تشغيل الكاميرا: ' + err.message, 'error');
+            }
+        }
+
+        function capturePhoto() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            canvas.toBlob((blob) => {
+                capturedBlob = blob;
+                preview.src = URL.createObjectURL(blob);
+                
+                videoContainer.style.display = 'none';
+                previewContainer.style.display = 'block';
+                captureBtn.style.display = 'none';
+                retakeBtn.style.display = 'block';
+                uploadBtn.style.display = 'block';
+
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+
+                showStatus('تم التقاط الصورة بنجاح! ✅', 'success');
+            }, 'image/jpeg', 0.95);
+        }
+
+        function retakePhoto() {
+            videoContainer.style.display = 'block';
+            previewContainer.style.display = 'none';
+            captureBtn.style.display = 'block';
+            retakeBtn.style.display = 'none';
+            uploadBtn.style.display = 'none';
+            uploadSection.style.display = 'none';
+
+            startBtn.disabled = false;
+            captureBtn.disabled = true;
+            capturedBlob = null;
+
+            showStatus('جاهز لالتقاط صورة جديدة', 'info');
+        }
+
+        async function showUploadForm() {
+            uploadSection.style.display = 'block';
+            showStatus('جاري تحميل قائمة الموظفين...', 'info');
+
+            // Try to login and load employees
+            await loadEmployees();
+        }
+
+        async function loadEmployees() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                // Login first
+                const loginRes = await fetch('http://localhost:3000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (!loginRes.ok) {
+                    throw new Error('فشل تسجيل الدخول');
+                }
+
+                const loginData = await loginRes.json();
+                token = loginData.data.tokens.accessToken;
+
+                // Load employees
+                const empRes = await fetch('http://localhost:3000/api/employees', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!empRes.ok) {
+                    throw new Error('فشل تحميل الموظفين');
+                }
+
+                const empData = await empRes.json();
+                const select = document.getElementById('employeeSelect');
+                select.innerHTML = '<option value="">-- اختر موظف --</option>';
+
+                empData.data.forEach(emp => {
+                    const option = document.createElement('option');
+                    option.value = emp.id;
+                    option.textContent = `${emp.name} (${emp.employee_no})`;
+                    select.appendChild(option);
+                });
+
+                showStatus(`تم تحميل ${empData.data.length} موظف بنجاح ✅`, 'success');
+            } catch (err) {
+                showStatus('خطأ: ' + err.message, 'error');
+            }
+        }
+
+        async function uploadPhoto() {
+            const employeeId = document.getElementById('employeeSelect').value;
+
+            if (!employeeId) {
+                showStatus('الرجاء اختيار موظف', 'error');
+                return;
+            }
+
+            if (!capturedBlob) {
+                showStatus('لا توجد صورة للرفع!', 'error');
+                return;
+            }
+
+            if (!token) {
+                showStatus('الرجاء تسجيل الدخول أولاً', 'error');
+                return;
+            }
+
+            try {
+                showStatus('جاري رفع الصورة... ⏳', 'info');
+
+                const formData = new FormData();
+                formData.append('photo', capturedBlob, 'face-photo.jpg');
+
+                const response = await fetch(`http://localhost:3000/api/employees/${employeeId}/photo/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'فشل رفع الصورة');
+                }
+
+                const data = await response.json();
+                showStatus(`✅ تم رفع الصورة بنجاح!\n\n📝 الآن يمكنك مزامنة بيانات الوجه مع الجهاز باستخدام:\n\nPOST /api/devices/{deviceId}/sync`, 'success');
+
+            } catch (err) {
+                showStatus('❌ خطأ في رفع الصورة: ' + err.message, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Auto-load employees when showing upload form
+        document.getElementById('email').addEventListener('change', loadEmployees);
+        document.getElementById('password').addEventListener('change', loadEmployees);
+    </script>
+</body>
+</html>

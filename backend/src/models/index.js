@@ -27,6 +27,7 @@ import SystemSetting from './SystemSetting.js';
 import AccessTimeZone from './AccessTimeZone.js';
 import Door from './Door.js';
 import AccessPermission from './AccessPermission.js';
+import PushSubscription from './PushSubscription.js';
 
 // Initialize all models
 const models = {
@@ -47,6 +48,7 @@ const models = {
   AccessTimeZone: AccessTimeZone.init(sequelize),
   Door: Door.init(sequelize),
   AccessPermission: AccessPermission.init(sequelize),
+  PushSubscription: PushSubscription.init(sequelize),
 };
 
 // Setup associations
@@ -77,7 +79,8 @@ export {
   SystemSetting,
   AccessTimeZone,
   Door,
-  AccessPermission
+  AccessPermission,
+  PushSubscription
 };
 
 export default models;

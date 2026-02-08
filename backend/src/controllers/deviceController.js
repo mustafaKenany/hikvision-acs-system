@@ -126,6 +126,19 @@ class DeviceController {
   });
 
   /**
+   * POST /api/devices/:id/test-connection
+   * Test connection to physical device
+   */
+  testConnection = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+
+    const result = await deviceService.testConnection(userId, deviceId);
+
+    return success(res, result, 'تم اختبار الاتصال بنجاح', 200);
+  });
+
+  /**
    * POST /api/devices/:id/sync
    * Sync device data
    */
@@ -136,6 +149,20 @@ class DeviceController {
     const result = await deviceService.syncDevice(userId, deviceId);
 
     return success(res, result, 'تمت مزامنة الجهاز بنجاح', 200);
+  });
+
+  /**
+   * POST /api/devices/:id/live-capture/:employeeId
+   * Activate live face capture mode
+   */
+  activateLiveCapture = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+    const employeeId = parseInt(req.params.employeeId);
+
+    const result = await deviceService.activateLiveFaceCapture(userId, deviceId, employeeId);
+
+    return success(res, result, 'تم تفعيل وضع التقاط الوجه', 200);
   });
 }
 

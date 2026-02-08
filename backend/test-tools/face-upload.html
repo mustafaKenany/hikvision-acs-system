@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 رفع صورة للجهاز - Hikvision Face Upload</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .device-info {
+            background: #f0f4ff;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .device-info h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .device-info p {
+            color: #555;
+            margin: 5px 0;
+        }
+
+        .upload-area {
+            border: 3px dashed #ccc;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 10px;
+        }
+
+        #imagePreview {
+            display: none;
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            margin: 20px auto;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 2px solid #bee5eb;
+        }
+
+        .progress {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .instructions {
+            background: #fffbea;
+            border: 2px solid #f59e0b;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .instructions h3 {
+            color: #92400e;
+            margin-bottom: 10px;
+        }
+
+        .instructions ul {
+            margin-right: 20px;
+            color: #92400e;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 رفع صورة للجهاز</h1>
+        <p class="subtitle">Hikvision DS-K1T344MX-E1 Face Upload Tool</p>
+
+        <div class="device-info">
+            <h3>📱 معلومات الجهاز المتصل:</h3>
+            <p><strong>IP:</strong> 192.168.1.37</p>
+            <p><strong>الموديل:</strong> DS-K1T344MX-E1 (Face Recognition Terminal)</p>
+            <p><strong>Firmware:</strong> V4.13.0</p>
+            <p><strong>الحالة:</strong> <span style="color: green;">🟢 Online</span></p>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 التعليمات:</h3>
+            <ul>
+                <li>اختر صورة واضحة للوجه (JPG أو PNG)</li>
+                <li>حجم الصورة يكون أقل من 5 ميجا</li>
+                <li>الوجه يكون واضح ومضاء زين</li>
+                <li>سجل دخول بحسابك</li>
+                <li>اختر الموظف أو أضف واحد جديد</li>
+                <li>اضغط رفع الصورة</li>
+            </ul>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📸</div>
+            <h3>اسحب الصورة هنا أو اضغط للاختيار</h3>
+            <p style="color: #999; margin-top: 10px;">JPG, JPEG, PNG - حجم أقصى 5MB</p>
+            <input type="file" id="fileInput" accept="image/jpeg,image/jpg,image/png" style="display: none;">
+        </div>
+
+        <img id="imagePreview" alt="Preview">
+
+        <div class="form-group">
+            <label>📧 البريد الإلكتروني:</label>
+            <input type="email" id="email" value="admin@demo.test" placeholder="admin@demo.test">
+        </div>
+
+        <div class="form-group">
+            <label>🔑 كلمة المرور:</label>
+            <input type="password" id="password" value="Admin@123" placeholder="كلمة المرور">
+        </div>
+
+        <div class="form-group">
+            <label>👤 رقم الموظف:</label>
+            <input type="text" id="employeeNo" placeholder="مثال: EMP001" required>
+        </div>
+
+        <div class="form-group">
+            <label>✏️ اسم الموظف:</label>
+            <input type="text" id="employeeName" placeholder="مثال: أحمد محمد" required>
+        </div>
+
+        <button id="uploadBtn" onclick="uploadToDevice()" disabled>
+            ⬆️ رفع الصورة للجهاز
+        </button>
+
+        <div class="progress" id="progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%;">0%</div>
+            </div>
+        </div>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progress = document.getElementById('progress');
+        const progressFill = document.getElementById('progressFill');
+        const status = document.getElementById('status');
+
+        let selectedFile = null;
+        let token = null;
+
+        // Click to upload
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            // Validate file type
+            if (!file.type.match('image/(jpeg|jpg|png)')) {
+                showStatus('الرجاء اختيار صورة JPG أو PNG فقط', 'error');
+                return;
+            }
+
+            // Validate file size (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                showStatus('حجم الصورة أكبر من 5 ميجا!', 'error');
+                return;
+            }
+
+            selectedFile = file;
+
+            // Preview image
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                uploadBtn.disabled = false;
+                showStatus('✅ الصورة جاهزة للرفع', 'success');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function uploadToDevice() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const employeeNo = document.getElementById('employeeNo').value;
+            const employeeName = document.getElementById('employeeName').value;
+
+            if (!selectedFile) {
+                showStatus('الرجاء اختيار صورة أولاً', 'error');
+                return;
+            }
+
+            if (!employeeNo || !employeeName) {
+                showStatus('الرجاء إدخال رقم واسم الموظف', 'error');
+                return;
+            }
+
+            try {
+                uploadBtn.disabled = true;
+                progress.style.display = 'block';
+                updateProgress(10, 'جاري تسجيل الدخول...');
+
+                // 1. Login
+                const loginRes = await fetch('http://localhost:3000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (!loginRes.ok) {
+                    throw new Error('فشل تسجيل الدخول - تحقق من البريد وكلمة المرور');
+                }
+
+                const loginData = await loginRes.json();
+                token = loginData.data.tokens.accessToken;
+                updateProgress(30, 'تم تسجيل الدخول ✓');
+
+                // 2. Check if employee exists or create new one
+                updateProgress(40, 'جاري التحقق من الموظف...');
+                
+                let employeeId;
+                const checkRes = await fetch(`http://localhost:3000/api/employees?search=${employeeNo}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const checkData = await checkRes.json();
+                const existingEmp = checkData.data?.employees?.find(e => e.employee_no === employeeNo);
+
+                if (existingEmp) {
+                    employeeId = existingEmp.id;
+                    updateProgress(50, 'الموظف موجود ✓');
+                } else {
+                    // Create new employee
+                    const createRes = await fetch('http://localhost:3000/api/employees', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            employee_no: employeeNo,
+                            name: employeeName,
+                            department: 'General',
+                            position: 'Employee',
+                            is_active: true
+                        })
+                    });
+
+                    if (!createRes.ok) {
+                        const errData = await createRes.json();
+                        throw new Error(errData.message || 'فشل إضافة الموظف');
+                    }
+
+                    const createData = await createRes.json();
+                    employeeId = createData.data.id;
+                    updateProgress(50, 'تم إضافة الموظف ✓');
+                }
+
+                // 3. Upload photo
+                updateProgress(60, 'جاري رفع الصورة...');
+                
+                const formData = new FormData();
+                formData.append('photo', selectedFile);
+
+                const photoRes = await fetch(`http://localhost:3000/api/employees/${employeeId}/photo`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                if (!photoRes.ok) {
+                    const errData = await photoRes.json();
+                    throw new Error(errData.message || 'فشل رفع الصورة');
+                }
+
+                updateProgress(80, 'تم رفع الصورة ✓');
+
+                // 4. Sync to device
+                updateProgress(90, 'جاري المزامنة مع الجهاز...');
+                
+                const syncRes = await fetch('http://localhost:3000/api/devices/2/sync', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const syncData = await syncRes.json();
+                updateProgress(100, '✅ تمت العملية بنجاح!');
+
+                showStatus(`🎉 تم رفع الصورة بنجاح!\n\nالموظف: ${employeeName}\nالرقم: ${employeeNo}\n\nالنتيجة: ${syncData.message}`, 'success');
+
+                // Reset after 5 seconds
+                setTimeout(() => {
+                    resetForm();
+                }, 5000);
+
+            } catch (error) {
+                showStatus('❌ خطأ: ' + error.message, 'error');
+                uploadBtn.disabled = false;
+                progress.style.display = 'none';
+            }
+        }
+
+        function updateProgress(percent, message) {
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = message;
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+
+        function resetForm() {
+            selectedFile = null;
+            imagePreview.style.display = 'none';
+            uploadBtn.disabled = true;
+            progress.style.display = 'none';
+            fileInput.value = '';
+            document.getElementById('employeeNo').value = '';
+            document.getElementById('employeeName').value = '';
+            showStatus('جاهز لرفع صورة جديدة', 'info');
+        }
+    </script>
+</body>
+</html>

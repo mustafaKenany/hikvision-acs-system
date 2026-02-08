@@ -1,0 +1,39 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Cairo', 'Roboto', sans-serif !important;
+  font-weight: 600 !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* RTL Support */
+[dir="rtl"] {
+  direction: rtl;
+}
+
+[dir="rtl"] .v-list-item__prepend {
+  margin-inline-end: 16px;
+  margin-inline-start: 0;
+}
+
+/* Typography - SemiBold Font */
+.v-application {
+  font-family: 'Cairo', 'Roboto', sans-serif !important;
+}
+
+.v-btn,
+.v-card-title,
+.v-list-item-title,
+.v-toolbar-title,
+.v-tab {
+  font-weight: 600 !important;
+}
+
+.text-h1, .text-h2, .text-h3, .text-h4, .text-h5, .text-h6 {
+  font-weight: 600 !important;
+}

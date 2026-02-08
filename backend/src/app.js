@@ -26,6 +26,7 @@ import userRoutes from './routes/userRoutes.js';
 import employeeRoutes from './routes/employeeRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 // ... etc
 
 // Create Express app
@@ -129,6 +130,9 @@ app.use('/api/devices', deviceRoutes);
 
 // Organization routes
 app.use('/api/organizations', organizationRoutes);
+
+// Notification routes
+app.use('/api/notifications', notificationRoutes);
 
 // Door routes
 // app.use('/api/doors', doorRoutes);

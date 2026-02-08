@@ -9,9 +9,11 @@
  * - Device sync operations
  */
 
-import { Organization, User, Device } from '../models/index.js';
+import { Organization, User, Device, Employee } from '../models/index.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import { Op } from 'sequelize';
+import HikvisionClient from '../utils/hikvisionClient.js';
+import fs from 'fs/promises';
 
 /**
  * Get all devices with filtering, pagination, and search
@@ -466,6 +468,74 @@ export async function getDeviceStatus(userId, deviceId) {
 }
 
 /**
+ * Test connection to physical device
+ */
+export async function testConnection(userId, deviceId) {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new AppError('المستخدم غير موجود', 404);
+  }
+
+  const whereClause = {
+    id: deviceId,
+    deleted_at: null
+  };
+
+  if (user.role !== 'super_admin') {
+    whereClause.organization_id = user.organization_id;
+  }
+
+  const device = await Device.findOne({ where: whereClause });
+
+  if (!device) {
+    throw new AppError('الجهاز غير موجود', 404);
+  }
+
+  if (!device.is_active) {
+    throw new AppError('لا يمكن الاتصال بجهاز معطّل', 400);
+  }
+
+  // Create Hikvision client
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  // Test connection
+  const result = await client.testConnection();
+
+  if (result.success) {
+    // Update device info
+    await device.update({
+      is_online: true,
+      last_seen: new Date(),
+      firmware_version: result.deviceInfo.firmwareVersion,
+      model: result.deviceInfo.model,
+      serial_number: result.deviceInfo.serialNumber
+    });
+
+    return {
+      success: true,
+      connected: true,
+      device_id: device.id,
+      device_name: device.name,
+      deviceInfo: result.deviceInfo,
+      message: 'تم الاتصال بالجهاز بنجاح'
+    };
+  } else {
+    // Mark device as offline
+    await device.update({
+      is_online: false,
+      last_seen: new Date()
+    });
+
+    throw new AppError(`فشل الاتصال بالجهاز: ${result.error}`, 500);
+  }
+}
+
+/**
  * Sync device data
  */
 export async function syncDevice(userId, deviceId) {
@@ -493,26 +563,202 @@ export async function syncDevice(userId, deviceId) {
     throw new AppError('لا يمكن مزامنة جهاز معطّل', 400);
   }
 
-  // TODO: Implement actual sync via HikVision SDK
-  // This will:
-  // 1. Connect to device
-  // 2. Get device capabilities
-  // 3. Sync user data (faces, fingerprints, cards)
-  // 4. Update device status
+  // Create Hikvision client
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
 
-  // For now, just update last_sync timestamp
+  // Test connection first
+  const connectionTest = await client.testConnection();
+  if (!connectionTest.success) {
+    await device.update({ is_online: false, last_seen: new Date() });
+    throw new AppError(`فشل الاتصال بالجهاز: ${connectionTest.error}`, 500);
+  }
+
+  // Update device info
   await device.update({
-    last_sync: new Date(),
-    is_online: true, // Assume online if sync successful
-    last_seen: new Date()
+    is_online: true,
+    last_seen: new Date(),
+    firmware_version: connectionTest.deviceInfo.firmwareVersion,
+    model: connectionTest.deviceInfo.model,
+    serial_number: connectionTest.deviceInfo.serialNumber
+  });
+
+  const syncResults = {
+    deviceInfo: connectionTest.deviceInfo,
+    uploadedFaces: 0,
+    failedUploads: 0,
+    errors: []
+  };
+
+  // Get face capacity
+  const capacityResult = await client.getFaceCapacity();
+  if (capacityResult.success) {
+    await device.update({
+      max_faces: parseInt(capacityResult.capacity.maxFaceNumPerLib) || device.max_faces
+    });
+    syncResults.capacity = capacityResult.capacity;
+  }
+
+  // Sync employees with photos
+  if (device.device_type === 'face_recognition') {
+    const employees = await Employee.findAll({
+      where: {
+        organization_id: device.organization_id,
+        photo_url: { [Op.ne]: null },
+        is_active: true,
+        deleted_at: null
+      }
+    });
+
+    syncResults.totalEmployees = employees.length;
+
+    for (const employee of employees) {
+      try {
+        // Read photo file
+        const photoPath = employee.photo_url.replace('/uploads/', 'uploads/');
+        let imageBase64 = null;
+
+        try {
+          const imageBuffer = await fs.readFile(photoPath);
+          imageBase64 = imageBuffer.toString('base64');
+        } catch (fileError) {
+          syncResults.errors.push({
+            employee: employee.name,
+            error: 'Photo file not found'
+          });
+          syncResults.failedUploads++;
+          continue;
+        }
+
+        // Upload face to device
+        const uploadResult = await client.uploadFace({
+          employeeNo: employee.employee_no,
+          name: employee.name,
+          faceLibId: 1,
+          imageBase64: imageBase64
+        });
+
+        if (uploadResult.success) {
+          syncResults.uploadedFaces++;
+          
+          // Update employee with device sync info
+          await employee.update({
+            synced_to_device: true,
+            last_synced_at: new Date()
+          });
+        } else {
+          syncResults.failedUploads++;
+          syncResults.errors.push({
+            employee: employee.name,
+            error: uploadResult.error
+          });
+        }
+      } catch (error) {
+        syncResults.failedUploads++;
+        syncResults.errors.push({
+          employee: employee.name,
+          error: error.message
+        });
+      }
+    }
+  }
+
+  // Update last sync timestamp
+  await device.update({
+    last_sync: new Date()
   });
 
   return {
     success: true,
     device_id: device.id,
+    device_name: device.name,
     synced_at: device.last_sync,
-    message: 'تمت المزامنة بنجاح (سيتم دمج SDK لاحقاً)'
+    results: syncResults,
+    message: `تمت المزامنة بنجاح - تم رفع ${syncResults.uploadedFaces} وجه من أصل ${syncResults.totalEmployees || 0}`
   };
+}
+
+/**
+ * Activate live face capture mode on device
+ */
+export async function activateLiveFaceCapture(userId, deviceId, employeeId) {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new AppError('المستخدم غير موجود', 404);
+  }
+
+  const whereClause = {
+    id: deviceId,
+    deleted_at: null
+  };
+
+  if (user.role !== 'super_admin') {
+    whereClause.organization_id = user.organization_id;
+  }
+
+  const device = await Device.findOne({ where: whereClause });
+
+  if (!device) {
+    throw new AppError('الجهاز غير موجود', 404);
+  }
+
+  if (!device.is_active) {
+    throw new AppError('لا يمكن استخدام جهاز معطّل', 400);
+  }
+
+  // Get employee
+  const employee = await Employee.findOne({
+    where: {
+      id: employeeId,
+      organization_id: device.organization_id,
+      deleted_at: null
+    }
+  });
+
+  if (!employee) {
+    throw new AppError('الموظف غير موجود', 404);
+  }
+
+  // Create Hikvision client
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  // Activate live capture
+  const result = await client.startLiveFaceCapture({
+    employeeNo: employee.employee_no,
+    name: employee.name
+  });
+
+  if (result.success) {
+    return {
+      success: true,
+      device_id: device.id,
+      device_name: device.name,
+      device_ip: device.ip_address,
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        employee_no: employee.employee_no
+      },
+      message: result.message,
+      instructions: [
+        '1. روح قدام الجهاز',
+        '2. اطلع بوجهك للكاميرا',
+        '3. الجهاز راح ياخذ صورة تلقائياً',
+        '4. انتظر رسالة النجاح على الجهاز'
+      ]
+    };
+  } else {
+    throw new AppError(result.error || 'فشل تفعيل وضع التقاط الوجه', 500);
+  }
 }
 
 // Export all functions
@@ -526,5 +772,7 @@ export default {
   deactivateDevice,
   getDeviceStats,
   getDeviceStatus,
-  syncDevice
+  testConnection,
+  syncDevice,
+  activateLiveFaceCapture
 };
