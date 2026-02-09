@@ -170,6 +170,21 @@ export async function createEmployee(creatorId, employeeData, ipAddress) {
     is_active = true
   } = employeeData;
 
+  // Validate required fields
+  const validationErrors = [];
+  if (!employee_no || employee_no.trim() === '') {
+    validationErrors.push({ field: 'employee_no', message: 'رقم الموظف مطلوب' });
+  }
+  if (!name || name.trim() === '') {
+    validationErrors.push({ field: 'name', message: 'الاسم بالإنجليزي مطلوب' });
+  }
+  
+  if (validationErrors.length > 0) {
+    const error = new AppError('خطأ في التحقق من البيانات', 400);
+    error.details = validationErrors;
+    throw error;
+  }
+
   // Determine organization_id
   let targetOrgId = organization_id;
   
@@ -373,10 +388,19 @@ export async function deleteEmployee(deleterId, employeeId, ipAddress) {
     throw new AppError('غير مصرح لك بحذف هذا الموظف', 403);
   }
 
-  // Soft delete
-  await targetEmployee.update({ is_active: false });
+  // Store employee data for audit log before deletion
+  const employeeData = {
+    id: targetEmployee.id,
+    employee_no: targetEmployee.employee_no,
+    name: targetEmployee.name,
+    name_ar: targetEmployee.name_ar,
+    email: targetEmployee.email,
+    department: targetEmployee.department,
+    position: targetEmployee.position,
+    organization_id: targetEmployee.organization_id
+  };
 
-  // Create audit log
+  // Create audit log BEFORE deleting
   await AuditLog.create({
     user_id: deleterId,
     action: 'delete',
@@ -384,13 +408,12 @@ export async function deleteEmployee(deleterId, employeeId, ipAddress) {
     resource_id: employeeId,
     description: `تم حذف الموظف: ${targetEmployee.name} (${targetEmployee.employee_no})`,
     ip_address: ipAddress,
-    old_values: {
-      is_active: true
-    },
-    new_values: {
-      is_active: false
-    }
+    old_values: employeeData,
+    new_values: null
   });
+
+  // Hard delete (actual deletion from database)
+  await targetEmployee.destroy();
 
   return { message: 'تم حذف الموظف بنجاح' };
 }

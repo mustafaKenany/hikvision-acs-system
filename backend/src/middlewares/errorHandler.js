@@ -110,7 +110,8 @@ const errorHandler = (err, req, res, next) => {
   let error = {
     statusCode: err.statusCode || 500,
     message: err.message || 'حدث خطأ في الخادم',
-    errors: err.errors || []
+    errors: err.errors || [],
+    details: err.details || err.errors || []  // Support both details and errors
   };
 
   // Sequelize Validation Error
@@ -144,6 +145,7 @@ const errorHandler = (err, req, res, next) => {
     success: false,
     message: error.message,
     errors: error.errors,
+    details: error.details,
     ...(process.env.NODE_ENV === 'development' && {
       stack: err.stack
     })
@@ -167,6 +169,7 @@ class AppError extends Error {
     super(message);
     this.statusCode = statusCode;
     this.errors = errors;
+    this.details = null;  // يمكن تعيينها لاحقاً
     this.isOperational = true;
 
     Error.captureStackTrace(this, this.constructor);

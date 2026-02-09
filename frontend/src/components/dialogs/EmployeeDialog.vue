@@ -19,8 +19,8 @@
                   style="border: 3px solid #1976d2"
                 >
                   <v-img
-                    v-if="photoPreview || form.photo_url"
-                    :src="photoPreview || form.photo_url"
+                    v-if="photoPreview || photoUrl"
+                    :src="photoPreview || photoUrl"
                     cover
                   />
                   <v-icon v-else size="100" color="grey">mdi-account</v-icon>
@@ -80,7 +80,9 @@
                 <!-- Employee Number -->
                 <v-col cols="12" sm="6">
                   <v-text-field
+                    id="employee_no"
                     v-model="form.employee_no"
+                    name="employee_no"
                     label="رقم الموظف *"
                     prepend-inner-icon="mdi-numeric"
                     variant="outlined"
@@ -92,7 +94,9 @@
                 <!-- Full Name -->
                 <v-col cols="12" sm="6">
                   <v-text-field
+                    id="name"
                     v-model="form.name"
+                    name="name"
                     label="الاسم الكامل *"
                     prepend-inner-icon="mdi-account"
                     variant="outlined"
@@ -104,7 +108,9 @@
                 <!-- Organization -->
                 <v-col cols="12" sm="6">
                   <v-select
+                    id="organization_id"
                     v-model="form.organization_id"
+                    name="organization_id"
                     label="المنظمة *"
                     prepend-inner-icon="mdi-office-building"
                     variant="outlined"
@@ -120,7 +126,9 @@
                 <!-- Department -->
                 <v-col cols="12" sm="6">
                   <v-text-field
+                    id="department"
                     v-model="form.department"
+                    name="department"
                     label="القسم"
                     prepend-inner-icon="mdi-domain"
                     variant="outlined"
@@ -130,7 +138,9 @@
                 <!-- Position -->
                 <v-col cols="12" sm="6">
                   <v-text-field
+                    id="position"
                     v-model="form.position"
+                    name="position"
                     label="المنصب"
                     prepend-inner-icon="mdi-briefcase"
                     variant="outlined"
@@ -140,7 +150,9 @@
                 <!-- Email -->
                 <v-col cols="12" sm="6">
                   <v-text-field
+                    id="email"
                     v-model="form.email"
+                    name="email"
                     label="البريد الإلكتروني"
                     prepend-inner-icon="mdi-email"
                     variant="outlined"
@@ -152,7 +164,9 @@
                 <!-- Phone -->
                 <v-col cols="12" sm="6">
                   <v-text-field
+                    id="phone"
                     v-model="form.phone"
+                    name="phone"
                     label="رقم الهاتف"
                     prepend-inner-icon="mdi-phone"
                     variant="outlined"
@@ -162,7 +176,9 @@
                 <!-- Hire Date -->
                 <v-col cols="12" sm="6">
                   <v-text-field
+                    id="hire_date"
                     v-model="form.hire_date"
+                    name="hire_date"
                     label="تاريخ التوظيف"
                     prepend-inner-icon="mdi-calendar"
                     variant="outlined"
@@ -173,7 +189,9 @@
                 <!-- Active Status -->
                 <v-col cols="12">
                   <v-switch
+                    id="is_active"
                     v-model="form.is_active"
+                    name="is_active"
                     label="الحالة: نشط"
                     color="primary"
                     hide-details
@@ -183,7 +201,9 @@
                 <!-- Notes -->
                 <v-col cols="12">
                   <v-textarea
+                    id="notes"
                     v-model="form.notes"
+                    name="notes"
                     label="ملاحظات"
                     prepend-inner-icon="mdi-text"
                     variant="outlined"
@@ -250,6 +270,15 @@ const photoFile = ref(null)
 
 const isEdit = computed(() => !!props.employee?.id)
 
+// Convert photo URL to absolute path if needed
+const photoUrl = computed(() => {
+  if (!form.value.photo_url) return null
+  // If already absolute URL, return as is
+  if (form.value.photo_url.startsWith('http')) return form.value.photo_url
+  // Convert relative path to absolute URL
+  return `http://localhost:3000${form.value.photo_url}`
+})
+
 const form = ref({
   employee_no: '',
   name: '',
@@ -313,31 +342,84 @@ const saveEmployee = async () => {
 
   saving.value = true
   try {
+    // تنظيف البيانات - إزالة الحقول الفارغة
+    const cleanedData = {}
+    for (const key in form.value) {
+      // تجاهل photo_url لأنها تُرفع منفصلة
+      if (key === 'photo_url' || key === 'biometrics_status') continue
+      
+      const value = form.value[key]
+      // إضافة الحقل فقط إذا كان له قيمة فعلية
+      if (value !== null && value !== undefined && value !== '') {
+        cleanedData[key] = value
+      }
+    }
+    // التأكد من الحقول المطلوبة
+    cleanedData.employee_no = form.value.employee_no
+    cleanedData.name = form.value.name
+    cleanedData.organization_id = form.value.organization_id
+    if (form.value.is_active !== undefined && form.value.is_active !== null) {
+      cleanedData.is_active = form.value.is_active
+    }
+
     let response
     if (isEdit.value) {
       // Update existing employee
-      response = await axios.put(`/api/employees/${props.employee.id}`, form.value)
+      response = await axios.put(`/api/employees/${props.employee.id}`, cleanedData)
     } else {
       // Create new employee
-      response = await axios.post('/api/employees', form.value)
+      response = await axios.post('/api/employees', cleanedData)
     }
 
-    const savedEmployee = response.data.data
+    let savedEmployee = response.data.data
 
     // Upload photo if exists
     if (photoFile.value && savedEmployee.id) {
-      const formData = new FormData()
-      formData.append('photo', photoFile.value)
-      await axios.post(`/api/employees/${savedEmployee.id}/photo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      try {
+        const formData = new FormData()
+        formData.append('photo', photoFile.value)
+        const photoResponse = await axios.post(`/api/employees/${savedEmployee.id}/photo`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        // تحديث بيانات الموظف بالصورة الجديدة
+        savedEmployee = photoResponse.data.data
+      } catch (photoError) {
+        console.error('Error uploading photo:', photoError)
+        // استمر في الحفظ حتى لو فشل رفع الصورة
+        alert('تم حفظ الموظف لكن فشل رفع الصورة: ' + (photoError.response?.data?.message || photoError.message))
+      }
     }
 
     emit('saved', savedEmployee)
     closeDialog()
   } catch (error) {
     console.error('Error saving employee:', error)
-    alert(error.response?.data?.message || 'حدث خطأ أثناء حفظ البيانات')
+    console.error('Response data:', error.response?.data)
+    console.error('Form data sent:', form.value)
+    
+    // عرض رسالة الخطأ من السيرفر بشكل مفصل
+    const errorData = error.response?.data || {}
+    const errorMessage = errorData.message || errorData.error || 'حدث خطأ أثناء حفظ البيانات'
+    
+    let details = ''
+    if (errorData.details) {
+      // إذا كانت التفاصيل عبارة عن array من أخطاء التحقق
+      if (Array.isArray(errorData.details)) {
+        details = errorData.details.map(d => `- ${d.field}: ${d.message}`).join('\n')
+      } else if (typeof errorData.details === 'object') {
+        details = JSON.stringify(errorData.details, null, 2)
+      } else {
+        details = errorData.details
+      }
+    } else if (errorData.errors) {
+      // بعض الأنظمة ترسل errors بدلاً من details
+      details = JSON.stringify(errorData.errors, null, 2)
+    } else {
+      // عرض كل البيانات المرسلة من السيرفر
+      details = `كود الحالة: ${error.response?.status}\n${JSON.stringify(errorData, null, 2)}`
+    }
+    
+    alert(`❌ ${errorMessage}\n\nالتفاصيل:\n${details}`)
   } finally {
     saving.value = false
   }

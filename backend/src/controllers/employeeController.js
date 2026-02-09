@@ -87,7 +87,7 @@ export const deleteEmployee = asyncHandler(async (req, res) => {
   
   const result = await employeeService.deleteEmployee(userId, employeeId, ipAddress);
   
-  success(res, result.message, null, 200);
+  success(res, null, result.message, 200);
 });
 
 /**

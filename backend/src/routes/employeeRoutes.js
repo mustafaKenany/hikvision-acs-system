@@ -23,6 +23,9 @@ import {
   getEmployeePhoto,
   deleteEmployeePhoto
 } from '../controllers/employeeController.js';
+import {
+  getEmployeeActivityLogs
+} from '../controllers/activityLogController.js';
 import { setUploadPath, uploadEmployeePhoto as uploadPhoto } from '../middlewares/upload.js';
 import { processEmployeePhotoMiddleware } from '../middlewares/imageProcessor.js';
 
@@ -64,6 +67,18 @@ router.get(
   employeeIdValidator,
   authorize(['super_admin', 'admin', 'manager'], ['employees.read']),
   getEmployeeBiometrics
+);
+
+/**
+ * @route   GET /api/employees/:id/activity-logs
+ * @desc    Get employee activity logs (attendance logs)
+ * @access  Private (admin+, manager+, employees.read)
+ */
+router.get(
+  '/:id/activity-logs',
+  employeeIdValidator,
+  authorize(['super_admin', 'admin', 'manager'], ['employees.read']),
+  getEmployeeActivityLogs
 );
 
 /**

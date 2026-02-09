@@ -8,6 +8,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Middlewares
 import {
@@ -27,6 +33,7 @@ import employeeRoutes from './routes/employeeRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import attendanceLogRoutes from './routes/attendanceLogRoutes.js';
 // ... etc
 
 // Create Express app
@@ -43,10 +50,11 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "http://localhost:3000", "http://localhost:5173"],
     },
   },
   crossOriginEmbedderPolicy: false, // للسماح بـ CORS
+  crossOriginResourcePolicy: { policy: "cross-origin" } // للسماح بتحميل الصور من نطاقات مختلفة
 }));
 
 // CORS - السماح للـ frontend بالاتصال
@@ -134,6 +142,9 @@ app.use('/api/organizations', organizationRoutes);
 // Notification routes
 app.use('/api/notifications', notificationRoutes);
 
+// Attendance Log routes
+app.use('/api/attendance-logs', attendanceLogRoutes);
+
 // Door routes
 // app.use('/api/doors', doorRoutes);
 
@@ -165,8 +176,17 @@ app.use('/api/notifications', notificationRoutes);
 // Static Files (للصور والملفات)
 // ======================
 
-// Serve uploaded files
-app.use('/uploads', express.static('uploads'));
+// Serve uploaded files with CORS headers
+const uploadsPath = path.join(__dirname, '..', 'uploads');
+app.use('/uploads', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(uploadsPath));
+
+logger.info(`Static files will be served from: ${uploadsPath}`);
 
 // ======================
 // Error Handling

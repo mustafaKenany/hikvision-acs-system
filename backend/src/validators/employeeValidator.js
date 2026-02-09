@@ -20,62 +20,60 @@ export const createEmployeeValidator = [
     .withMessage('اسم الموظف يجب أن يكون بين 2 و 255 حرف'),
   
   body('name_ar')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ min: 2, max: 255 })
     .withMessage('الاسم بالعربي يجب أن يكون بين 2 و 255 حرف'),
   
   body('email')
-    .optional()
+    .optional({ checkFalsy: true })  // تجاهل القيم الفارغة
     .isEmail()
     .withMessage('البريد الإلكتروني غير صالح')
     .normalizeEmail(),
   
   body('phone')
-    .optional()
+    .optional({ checkFalsy: true })  // تجاهل القيم الفارغة
     .matches(/^\+?[0-9]{10,20}$/)
     .withMessage('رقم الهاتف يجب أن يتكون من 10-20 رقم'),
   
   body('department')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 100 })
     .withMessage('اسم القسم يجب ألا يزيد عن 100 حرف'),
   
   body('position')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 100 })
     .withMessage('المسمى الوظيفي يجب ألا يزيد عن 100 حرف'),
   
-  body('photo_url')
-    .optional()
-    .isURL()
-    .withMessage('رابط الصورة غير صالح'),
+  // photo_url is managed separately via /employees/:id/photo endpoint
+  // No validation needed here
   
   body('hire_date')
-    .optional()
+    .optional({ checkFalsy: true })  // تجاهل القيم الفارغة
     .isISO8601()
     .withMessage('تاريخ التوظيف غير صالح'),
   
   body('organization_id')
-    .optional()
+    .optional({ checkFalsy: true })
     .isInt({ min: 1 })
     .withMessage('معرف المؤسسة يجب أن يكون رقماً صحيحاً'),
   
   body('notes')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 5000 })
     .withMessage('الملاحظات يجب ألا تزيد عن 5000 حرف'),
   
   body('metadata')
-    .optional()
+    .optional({ checkFalsy: true })
     .isObject()
     .withMessage('البيانات الإضافية يجب أن تكون كائن JSON'),
   
   body('is_active')
-    .optional()
+    .optional({ checkFalsy: true })
     .isBoolean()
     .withMessage('حالة التفعيل يجب أن تكون true أو false'),
   
@@ -91,69 +89,67 @@ export const updateEmployeeValidator = [
     .withMessage('معرف الموظف غير صالح'),
   
   body('employee_no')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ min: 1, max: 50 })
     .withMessage('رقم الموظف يجب أن يكون بين 1 و 50 حرف'),
   
   body('name')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ min: 2, max: 255 })
     .withMessage('اسم الموظف يجب أن يكون بين 2 و 255 حرف'),
   
   body('name_ar')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ min: 2, max: 255 })
     .withMessage('الاسم بالعربي يجب أن يكون بين 2 و 255 حرف'),
   
   body('email')
-    .optional()
+    .optional({ checkFalsy: true })
     .isEmail()
     .withMessage('البريد الإلكتروني غير صالح')
     .normalizeEmail(),
   
   body('phone')
-    .optional()
+    .optional({ checkFalsy: true })
     .matches(/^\+?[0-9]{10,20}$/)
     .withMessage('رقم الهاتف يجب أن يتكون من 10-20 رقم'),
   
   body('department')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 100 })
     .withMessage('اسم القسم يجب ألا يزيد عن 100 حرف'),
   
   body('position')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 100 })
     .withMessage('المسمى الوظيفي يجب ألا يزيد عن 100 حرف'),
   
-  body('photo_url')
-    .optional()
-    .isURL()
-    .withMessage('رابط الصورة غير صالح'),
+  // photo_url is managed separately via /employees/:id/photo endpoint
+  // No validation needed here
   
   body('hire_date')
-    .optional()
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('تاريخ التوظيف غير صالح'),
   
   body('notes')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ max: 5000 })
     .withMessage('الملاحظات يجب ألا تزيد عن 5000 حرف'),
   
   body('metadata')
-    .optional()
+    .optional({ checkFalsy: true })
     .isObject()
     .withMessage('البيانات الإضافية يجب أن تكون كائن JSON'),
   
   body('is_active')
-    .optional()
+    .optional({ checkFalsy: true })
     .isBoolean()
     .withMessage('حالة التفعيل يجب أن تكون true أو false'),
   

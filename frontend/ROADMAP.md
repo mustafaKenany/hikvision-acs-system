@@ -786,6 +786,146 @@ src/
 
 ---
 
+## 🌟 ميزات متقدمة (Advanced Features)
+
+> هذه الميزات ستُضاف بعد إكمال الوظائف الأساسية لجميع الأقسام
+
+### 👥 قسم الموظفين (Employees Module)
+
+#### 1. 📋 استيراد جماعي (Bulk Import)
+- **الوصف:** رفع ملف Excel/CSV يحتوي على عشرات أو مئات الموظفين دفعة واحدة
+- **الميزات:**
+  - دعم تنسيقات: `.xlsx`, `.xls`, `.csv`
+  - معاينة البيانات قبل الاستيراد (Preview)
+  - التحقق من صحة البيانات (Validation)
+  - معالجة الأخطاء وعرضها صف بصف
+  - خيار تخطي السطور الخاطئة أو إلغاء العملية
+  - تقرير نهائي: (X موظف تم إضافتهم، Y موظف فشل)
+- **المكونات:**
+  - `BulkImportDialog.vue` - حوار رفع الملف
+  - `ImportPreviewTable.vue` - معاينة البيانات
+  - `ImportResultsDialog.vue` - نتائج الاستيراد
+- **الباك ايند:** يحتاج endpoint: `POST /api/employees/bulk-import`
+
+#### 2. ✔️ عمليات جماعية (Bulk Actions)
+- **الوصف:** تحديد عدة موظفين من الجدول وتنفيذ عملية واحدة عليهم
+- **العمليات المدعومة:**
+  - تفعيل/تعطيل جماعي (Bulk Activate/Deactivate)
+  - حذف جماعي (Bulk Delete) مع تأكيد
+  - نقل إلى قسم آخر (Bulk Move to Department)
+  - تصدير المحددين فقط (Export Selected)
+  - مزامنة مع أجهزة محددة (Sync to Devices)
+- **المكونات:**
+  - Checkbox في DataTable لتحديد الموظفين
+  - شريط إجراءات علوي (Bulk Actions Toolbar)
+  - Confirmation dialogs للعمليات الخطرة
+- **الباك ايند:** يحتاج endpoints:
+  - `POST /api/employees/bulk-activate`
+  - `POST /api/employees/bulk-deactivate`
+  - `DELETE /api/employees/bulk-delete`
+  - `PATCH /api/employees/bulk-update`
+
+#### 3. 📊 تقارير متقدمة (Advanced Reports)
+- **الوصف:** توليد تقارير مفصلة ومخصصة عن الموظفين
+- **أنواع التقارير:**
+  - تقرير الحضور الشهري (Monthly Attendance Report)
+  - تقرير الموظفين حسب القسم (Department Breakdown)
+  - تقرير الموظفين النشطين/غير النشطين
+  - تقرير الموظفين بدون بيانات بيومترية
+  - تقارير مخصصة (Custom Filter Reports)
+- **صيغ التصدير:**
+  - PDF مع شعار المنظمة
+  - Excel مع رسوم بيانية
+  - CSV للتحليل الخارجي
+- **المكونات:**
+  - `ReportsDialog.vue` - اختيار نوع التقرير والفلاتر
+  - `ReportPreview.vue` - معاينة قبل التنزيل
+  - Print-friendly layouts
+- **الباك ايند:** يحتاج endpoints:
+  - `GET /api/reports/employees/attendance`
+  - `GET /api/reports/employees/department`
+  - `POST /api/reports/employees/custom`
+
+#### 4. 🔐 صلاحيات الوصول (Access Permissions)
+- **الوصف:** ربط الموظف بالأبواب والمناطق المسموح له بدخولها
+- **الميزات:**
+  - تحديد الأبواب المصرح للموظف بفتحها
+  - تحديد الأوقات المسموح بها (Time-based access)
+  - تحديد أيام الأسبوع (Weekday restrictions)
+  - صلاحيات خاصة (VIP Access)
+  - سجل تغييرات الصلاحيات (Audit Log)
+- **المكونات:**
+  - `AccessPermissionsDialog.vue` - إدارة صلاحيات الموظف
+  - `DoorSelectionList.vue` - اختيار الأبواب بـ checkboxes
+  - `TimeRangeSelector.vue` - تحديد الأوقات
+- **الباك ايند:** موجود في:
+  - `GET /api/employees/:id/access-permissions`
+  - `PUT /api/employees/:id/access-permissions`
+
+#### 5. ⏰ جداول العمل (Work Schedules)
+- **الوصف:** تحديد أوقات العمل الرسمية لكل موظف أو قسم
+- **الميزات:**
+  - جداول ثابتة (9:00 AM - 5:00 PM)
+  - جداول مرنة (Flexible hours)
+  - ورديات (Shifts: صباحي، مسائي، ليلي)
+  - أيام الراحة
+  - الإجازات والعطل الرسمية
+  - إشعارات التأخير والغياب
+- **المكونات:**
+  - `WorkScheduleDialog.vue` - تعيين جدول العمل
+  - `ShiftCalendar.vue` - تقويم الورديات
+  - `AttendanceRulesDialog.vue` - قواعد الحضور
+- **الباك ايند:** يحتاج endpoints:
+  - `GET /api/work-schedules`
+  - `POST /api/work-schedules`
+  - `PUT /api/employees/:id/work-schedule`
+
+#### 6. 📱 QR Code للموظف (Employee QR Code)
+- **الوصف:** توليد QR Code فريد لكل موظف للمسح السريع والتعرف
+- **الميزات:**
+  - QR Code يحتوي على: ID, Name, Employee No
+  - إمكانية طباعة QR Code على البطاقة
+  - مسح QR للوصول السريع لبيانات الموظف
+  - QR للتسجيل في الأجهزة المحمولة
+  - Export QR codes جماعي لجميع الموظفين
+- **المكونات:**
+  - استخدام مكتبة `qrcode.vue` أو `vue-qrcode-reader`
+  - `QRCodeDisplay.vue` - عرض الـ QR
+  - إضافة QR إلى `EmployeeCardDialog.vue`
+- **الباك ايند:** 
+  - توليد QR في الفرونت ايند (client-side)
+  - أو endpoint: `GET /api/employees/:id/qr-code`
+
+#### 7. 📸 إدارة الصور المتقدمة (Advanced Photo Management)
+- **الوصف:** ميزات إضافية لإدارة صور الموظفين
+- **الميزات:**
+  - Crop & Resize قبل الرفع (Image Editor)
+  - تحديد منطقة الوجه يدوياً
+  - مكتبة صور (Photo Gallery) - تاريخ الصور
+  - مقارنة الصور (Compare before/after)
+  - Drag & Drop لرفع الصور
+- **المكونات:**
+  - `PhotoEditorDialog.vue` - محرر الصور
+  - `PhotoGallery.vue` - معرض الصور
+  - استخدام `vue-advanced-cropper`
+
+#### 8. 📧 إشعارات وتنبيهات (Notifications & Alerts)
+- **الوصف:** إرسال إشعارات للموظفين أو المشرفين
+- **الميزات:**
+  - إشعار عند إضافة موظف جديد
+  - تنبيه عند انتهاء صلاحية البيانات البيومترية
+  - تذكير بتحديث البيانات
+  - إشعارات البريد الإلكتروني (Email notifications)
+  - إشعارات SMS (اختياري)
+- **المكونات:**
+  - `NotificationCenter.vue`
+  - Bell icon مع عداد في AppBar
+- **الباك ايند:** موجود جزئياً في:
+  - `GET /api/notifications`
+  - `POST /api/notifications/send`
+
+---
+
 ## 🚀 خطة التنفيذ المقترحة
 
 ### الأسبوع 1-2:
@@ -826,4 +966,24 @@ src/
 - تغيير الأولويات
 - تحديث الحالة
 
-**آخر تحديث:** 8 فبراير 2026
+---
+
+## ✅ سجل التحديثات (Change Log)
+
+### 9 فبراير 2026
+- ✅ **إضافة قسم "ميزات متقدمة"** - 8 ميزات للموظفين
+  - استيراد جماعي (Bulk Import)
+  - عمليات جماعية (Bulk Actions)
+  - تقارير متقدمة (Advanced Reports)
+  - صلاحيات الوصول (Access Permissions)
+  - جداول العمل (Work Schedules)
+  - QR Code للموظف
+  - إدارة الصور المتقدمة
+  - إشعارات وتنبيهات
+
+### 8 فبراير 2026
+- ✅ إنشاء الملف الأولي
+- ✅ تحديد التقنيات المستخدمة
+- ✅ وضع خطة التنفيذ الأولية
+
+**آخر تحديث:** 9 فبراير 2026
