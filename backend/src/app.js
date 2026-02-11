@@ -34,6 +34,9 @@ import deviceRoutes from './routes/deviceRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import attendanceLogRoutes from './routes/attendanceLogRoutes.js';
+import auditLogRoutes from './routes/auditLogRoutes.js';
+import printRoutes from './routes/printRoutes.js';
+import accessLogRoutes from './routes/accessLogRoutes.js';
 // ... etc
 
 // Create Express app
@@ -144,6 +147,15 @@ app.use('/api/notifications', notificationRoutes);
 
 // Attendance Log routes
 app.use('/api/attendance-logs', attendanceLogRoutes);
+
+// Access Log routes
+app.use('/api/access-logs', accessLogRoutes);
+
+// Audit Log routes
+app.use('/api/audit-logs', auditLogRoutes);
+
+// Print routes
+app.use('/api/print', printRoutes);
 
 // Door routes
 // app.use('/api/doors', doorRoutes);

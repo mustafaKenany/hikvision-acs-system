@@ -76,7 +76,7 @@ export function useNotifications() {
       const registration = await registerServiceWorker()
 
       // 3. الحصول على VAPID Public Key من السيرفر
-      const { data: configData } = await axios.get('/api/notifications/config')
+      const { data: configData } = await axios.get('/notifications/config')
       const publicKey = configData.data.publicKey
 
       // 4. تحويل Public Key إلى Uint8Array
@@ -104,7 +104,7 @@ export function useNotifications() {
       console.log('✅ Push subscription created:', pushSubscription)
 
       // 6. إرسال الاشتراك إلى السيرفر
-      const { data: subscribeData } = await axios.post('/api/notifications/subscribe', {
+      const { data: subscribeData } = await axios.post('/notifications/subscribe', {
         subscription: pushSubscription.toJSON()
       })
 
@@ -136,7 +136,7 @@ export function useNotifications() {
       await pushSubscription.unsubscribe()
 
       // إلغاء الاشتراك من السيرفر
-      await axios.post('/api/notifications/unsubscribe', {
+      await axios.post('/notifications/unsubscribe', {
         endpoint: pushSubscription.endpoint
       })
 
@@ -183,7 +183,7 @@ export function useNotifications() {
   // إرسال إشعار تجريبي
   const sendTestNotification = async () => {
     try {
-      const { data } = await axios.post('/api/notifications/test')
+      const { data } = await axios.post('/notifications/test')
       return { success: true, message: 'تم إرسال إشعار تجريبي' }
     } catch (error) {
       console.error('❌ خطأ في إرسال الإشعار التجريبي:', error)

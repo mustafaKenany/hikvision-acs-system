@@ -572,6 +572,197 @@ export class HikvisionClient {
       };
     }
   }
+
+  /**
+   * Set device time
+   */
+  async setTime(dateTime) {
+    try {
+      const date = new Date(dateTime);
+      const timeXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Time>
+  <timeMode>NTP</timeMode>
+  <localTime>${date.toISOString()}</localTime>
+  <timeZone>CST-8:00:00</timeZone>
+</Time>`;
+
+      const url = `${this.baseUrl}/ISAPI/System/time`;
+      const response = await this.client.fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/xml'
+        },
+        body: timeXml
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return {
+        success: true,
+        message: 'Time synchronized successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get access logs from device
+   */
+  async getAccessLogs(filters = {}) {
+    try {
+      const { startTime, endTime, maxResults = 100 } = filters;
+      
+      const searchXml = `<?xml version="1.0" encoding="UTF-8"?>
+<AcsEventCond>
+  <searchID>1</searchID>
+  <searchResultPosition>0</searchResultPosition>
+  <maxResults>${maxResults}</maxResults>
+  ${startTime ? `<startTime>${new Date(startTime).toISOString()}</startTime>` : ''}
+  ${endTime ? `<endTime>${new Date(endTime).toISOString()}</endTime>` : ''}
+  <major>0</major>
+  <minor>0</minor>
+</AcsEventCond>`;
+
+      const url = `${this.baseUrl}/ISAPI/AccessControl/AcsEvent?format=json`;
+      const response = await this.client.fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/xml'
+        },
+        body: searchXml
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.text();
+      
+      try {
+        // Try parsing as JSON first
+        const jsonData = JSON.parse(data);
+        const events = jsonData.AcsEvent?.InfoList || [];
+        
+        return {
+          success: true,
+          logs: events.map(event => ({
+            employeeNo: event.employeeNoString,
+            timestamp: event.time,
+            verificationMethod: this.mapVerificationMethod(event.cardType),
+            logType: event.eventType === 0 ? 'check_in' : 'check_out',
+            temperature: event.temperature,
+            maskDetection: event.maskOn === '1',
+            rawData: event
+          }))
+        };
+      } catch (e) {
+        // Fallback to XML parsing
+        const xmlData = await parseStringPromise(data);
+        const events = xmlData.AcsEventCond?.AcsEvent || [];
+        
+        return {
+          success: true,
+          logs: events.map(event => ({
+            employeeNo: event.employeeNoString?.[0],
+            timestamp: event.time?.[0],
+            verificationMethod: this.mapVerificationMethod(event.cardType?.[0]),
+            logType: event.eventType?.[0] === '0' ? 'check_in' : 'check_out',
+            temperature: event.temperature?.[0],
+            maskDetection: event.maskOn?.[0] === '1',
+            rawData: event
+          }))
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Map verification method from card type
+   */
+  mapVerificationMethod(cardType) {
+    const typeMap = {
+      '1': 'card',
+      '2': 'fingerprint',
+      '3': 'face',
+      '4': 'password'
+    };
+    return typeMap[cardType] || 'unknown';
+  }
+
+  /**
+   * Clear device logs
+   */
+  async clearLogs() {
+    try {
+      const url = `${this.baseUrl}/ISAPI/AccessControl/AcsEvent?format=json`;
+      const response = await this.client.fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/xml'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return {
+        success: true,
+        message: 'Logs cleared successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Open door
+   */
+  async openDoor(doorNumber = 1, duration = 5) {
+    try {
+      const openDoorXml = `<?xml version="1.0" encoding="UTF-8"?>
+<RemoteControlDoor>
+  <cmd>open</cmd>
+</RemoteControlDoor>`;
+
+      const url = `${this.baseUrl}/ISAPI/AccessControl/RemoteControl/door/${doorNumber}`;
+      const response = await this.client.fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/xml'
+        },
+        body: openDoorXml
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return {
+        success: true,
+        message: `Door ${doorNumber} opened for ${duration} seconds`
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
 export default HikvisionClient;

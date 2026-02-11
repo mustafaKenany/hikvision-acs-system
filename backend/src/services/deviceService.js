@@ -9,7 +9,7 @@
  * - Device sync operations
  */
 
-import { Organization, User, Device, Employee } from '../models/index.js';
+import { Organization, User, Device, Employee, AuditLog } from '../models/index.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import { Op } from 'sequelize';
 import HikvisionClient from '../utils/hikvisionClient.js';
@@ -209,6 +209,22 @@ export async function createDevice(userId, data) {
     created_by: userId
   });
 
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'create',
+    resourceType: 'device',
+    resourceId: device.id,
+    description: `إضافة جهاز جديد: ${device.name}`,
+    newValues: {
+      name: device.name,
+      device_type: device.device_type,
+      ip_address: device.ip_address,
+      serial_number: device.serial_number,
+      organization_id: organizationId
+    }
+  });
+
   // Return with organization details
   return await getDeviceById(userId, device.id);
 }
@@ -283,10 +299,31 @@ export async function updateDevice(userId, deviceId, data) {
     }
   }
 
+  // Store old values for audit
+  const oldValues = {
+    name: device.name,
+    device_type: device.device_type,
+    ip_address: device.ip_address,
+    port: device.port,
+    location: device.location,
+    is_active: device.is_active
+  };
+
   // Update fields
   await device.update({
     ...data,
     updated_by: userId
+  });
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'update',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `تحديث بيانات الجهاز: ${device.name}`,
+    oldValues,
+    newValues: data
   });
 
   return await getDeviceById(userId, deviceId);
@@ -315,6 +352,21 @@ export async function deleteDevice(userId, deviceId) {
   if (!device) {
     throw new AppError('الجهاز غير موجود', 404);
   }
+
+  // Log action before deletion
+  await AuditLog.logAction({
+    userId,
+    action: 'delete',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `حذف الجهاز: ${device.name}`,
+    oldValues: {
+      name: device.name,
+      device_type: device.device_type,
+      ip_address: device.ip_address,
+      serial_number: device.serial_number
+    }
+  });
 
   // Soft delete
   await device.update({
@@ -358,6 +410,17 @@ export async function activateDevice(userId, deviceId) {
     updated_by: userId
   });
 
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'activate',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `تفعيل الجهاز: ${device.name}`,
+    oldValues: { is_active: false },
+    newValues: { is_active: true }
+  });
+
   return await getDeviceById(userId, deviceId);
 }
 
@@ -392,6 +455,17 @@ export async function deactivateDevice(userId, deviceId) {
   await device.update({
     is_active: false,
     updated_by: userId
+  });
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'deactivate',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `تعطيل الجهاز: ${device.name}`,
+    oldValues: { is_active: true },
+    newValues: { is_active: false }
   });
 
   return await getDeviceById(userId, deviceId);
@@ -514,6 +588,20 @@ export async function testConnection(userId, deviceId) {
       firmware_version: result.deviceInfo.firmwareVersion,
       model: result.deviceInfo.model,
       serial_number: result.deviceInfo.serialNumber
+    });
+
+    // Log action
+    await AuditLog.logAction({
+      userId,
+      action: 'read',
+      resourceType: 'device',
+      resourceId: deviceId,
+      description: `اختبار الاتصال بالجهاز: ${device.name} - ناجح`,
+      newValues: { 
+        is_online: true,
+        firmware_version: result.deviceInfo.firmwareVersion,
+        model: result.deviceInfo.model
+      }
     });
 
     return {
@@ -672,6 +760,21 @@ export async function syncDevice(userId, deviceId) {
     last_sync: new Date()
   });
 
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'update',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `مزامنة الموظفين مع الجهاز: ${device.name}`,
+    newValues: { 
+      last_sync: new Date(),
+      uploaded_faces: syncResults.uploadedFaces,
+      total_employees: syncResults.totalEmployees,
+      failed_uploads: syncResults.failedUploads
+    }
+  });
+
   return {
     success: true,
     device_id: device.id,
@@ -761,6 +864,375 @@ export async function activateLiveFaceCapture(userId, deviceId, employeeId) {
   }
 }
 
+/**
+ * Discover devices in network
+ * البحث عن أجهزة Hikvision في الشبكة
+ */
+export async function discoverDevices(userId, config) {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new AppError('المستخدم غير موجود', 404);
+  }
+
+  const { ipStart, ipEnd, port = 80, timeout = 5 } = config;
+
+  if (!ipStart || !ipEnd) {
+    throw new AppError('يجب تحديد نطاق IP', 400);
+  }
+
+  // Generate IP range
+  const ipList = generateIPRange(ipStart, ipEnd);
+  const devices = [];
+  let scannedCount = 0;
+
+  // Scan each IP (with limited concurrency)
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < ipList.length; i += BATCH_SIZE) {
+    const batch = ipList.slice(i, i + BATCH_SIZE);
+    
+    const results = await Promise.allSettled(
+      batch.map(async (ip) => {
+        try {
+          const client = new HikvisionClient({
+            ip_address: ip,
+            port,
+            username: 'admin',
+            password: 'admin' // Default for discovery
+          });
+
+          const result = await Promise.race([
+            client.testConnection(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), timeout * 1000)
+            )
+          ]);
+
+          scannedCount++;
+
+          if (result.success && result.connected) {
+            // Check if device already exists
+            const existingDevice = await Device.findOne({
+              where: { ip_address: ip, deleted_at: null }
+            });
+
+            return {
+              ip,
+              port,
+              deviceInfo: result.deviceInfo,
+              alreadyAdded: !!existingDevice,
+              existingDeviceId: existingDevice?.id
+            };
+          }
+          return null;
+        } catch (error) {
+          scannedCount++;
+          return null;
+        }
+      })
+    );
+
+    // Collect successful results
+    results.forEach(result => {
+      if (result.status === 'fulfilled' && result.value) {
+        devices.push(result.value);
+      }
+    });
+  }
+
+  return {
+    devices,
+    totalScanned: scannedCount,
+    found: devices.length
+  };
+}
+
+/**
+ * Helper function to generate IP range
+ */
+function generateIPRange(startIP, endIP) {
+  const start = startIP.split('.').map(Number);
+  const end = endIP.split('.').map(Number);
+  const ips = [];
+
+  for (let a = start[0]; a <= end[0]; a++) {
+    for (let b = start[1]; b <= end[1]; b++) {
+      for (let c = start[2]; c <= end[2]; c++) {
+        for (let d = start[3]; d <= end[3]; d++) {
+          ips.push(`${a}.${b}.${c}.${d}`);
+        }
+      }
+    }
+  }
+
+  return ips;
+}
+
+/**
+ * Get detailed device information
+ * جلب معلومات تفصيلية عن الجهاز من الجهاز نفسه
+ */
+export async function getDeviceInfo(userId, deviceId) {
+  const device = await getDeviceById(userId, deviceId);
+
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  // Get device info
+  const connectionResult = await client.testConnection();
+  
+  if (!connectionResult.success || !connectionResult.connected) {
+    throw new AppError('الجهاز غير متصل', 503);
+  }
+
+  // Get capacity info
+  const capacityResult = await client.getFaceCapacity();
+
+  return {
+    ...connectionResult.deviceInfo,
+    capacity: capacityResult.success ? capacityResult.capacity : null,
+    connectionStatus: {
+      isConnected: true,
+      lastChecked: new Date()
+    }
+  };
+}
+
+/**
+ * Sync device time with server
+ * مزامنة وقت الجهاز مع وقت السيرفر
+ */
+export async function syncDeviceTime(userId, deviceId) {
+  const device = await getDeviceById(userId, deviceId);
+
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  // Set current server time
+  const serverTime = new Date();
+  const result = await client.setTime(serverTime);
+
+  if (!result.success) {
+    throw new AppError(result.error || 'فشلت مزامنة الوقت', 500);
+  }
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'update',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `مزامنة وقت الجهاز: ${device.name}`,
+    newValues: { time_synced: serverTime }
+  });
+
+  return {
+    deviceTime: serverTime,
+    serverTime,
+    synced: true,
+    message: 'تمت مزامنة الوقت بنجاح'
+  };
+}
+
+/**
+ * Pull access logs from device
+ * سحب سجلات الحضور من الجهاز
+ */
+export async function pullDeviceLogs(userId, deviceId, filters = {}) {
+  const device = await getDeviceById(userId, deviceId);
+
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  // Get logs from device
+  const result = await client.getAccessLogs(filters);
+
+  if (!result.success) {
+    throw new AppError(result.error || 'فشل سحب السجلات', 500);
+  }
+
+  const logs = result.logs || [];
+  const savedLogs = [];
+
+  // Import AccessLog model (assuming it exists)
+  const { AccessLog: AccessLogModel } = await import('../models/index.js');
+
+  // Save each log to database
+  for (const log of logs) {
+    try {
+      // Find employee by employee_no
+      const employee = await Employee.findOne({
+        where: {
+          employee_no: log.employeeNo,
+          organization_id: device.organization_id,
+          deleted_at: null
+        }
+      });
+
+      const savedLog = await AccessLogModel.create({
+        device_id: deviceId,
+        employee_id: employee?.id,
+        employee_no: log.employeeNo,
+        timestamp: log.timestamp,
+        log_type: log.logType || 'check_in',
+        verification_method: log.verificationMethod || 'face',
+        temperature: log.temperature,
+        mask_detection: log.maskDetection,
+        photo: log.photo,
+        raw_data: log
+      });
+
+      savedLogs.push(savedLog);
+    } catch (error) {
+      console.error(`Error saving log for employee ${log.employeeNo}:`, error);
+    }
+  }
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'update',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `سحب ${savedLogs.length} سجل من الجهاز: ${device.name}`,
+    newValues: { logs_pulled: savedLogs.length }
+  });
+
+  return {
+    count: savedLogs.length,
+    totalReceived: logs.length,
+    logs: savedLogs,
+    message: `تم سحب ${savedLogs.length} سجل بنجاح`
+  };
+}
+
+/**
+ * Reboot device
+ * إعادة تشغيل الجهاز
+ */
+export async function rebootDevice(userId, deviceId) {
+  const device = await getDeviceById(userId, deviceId);
+
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  const result = await client.reboot();
+
+  if (!result.success) {
+    throw new AppError(result.error || 'فشلت إعادة التشغيل', 500);
+  }
+
+  // Update device status to offline (will be online again after reboot)
+  await device.update({
+    is_online: false,
+    last_seen: new Date()
+  });
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'update',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `إعادة تشغيل الجهاز: ${device.name}`,
+    newValues: { rebooted_at: new Date() }
+  });
+
+  return {
+    success: true,
+    message: 'تم إرسال أمر إعادة التشغيل للجهاز',
+    note: 'سيعود الجهاز للاتصال خلال 1-2 دقيقة'
+  };
+}
+
+/**
+ * Clear device logs
+ * مسح سجلات الجهاز من ذاكرته
+ */
+export async function clearDeviceLogs(userId, deviceId) {
+  const device = await getDeviceById(userId, deviceId);
+
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  const result = await client.clearLogs();
+
+  if (!result.success) {
+    throw new AppError(result.error || 'فشل مسح السجلات', 500);
+  }
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'delete',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `مسح سجلات الجهاز: ${device.name}`,
+    oldValues: { logs_cleared: true }
+  });
+
+  return {
+    success: true,
+    message: 'تم مسح سجلات الجهاز بنجاح',
+    warning: 'تأكد من سحب السجلات قبل المسح'
+  };
+}
+
+/**
+ * Open door connected to device
+ * فتح الباب المرتبط بالجهاز
+ */
+export async function openDoor(userId, deviceId, doorNumber = 1, duration = 5) {
+  const device = await getDeviceById(userId, deviceId);
+
+  const client = new HikvisionClient({
+    ip_address: device.ip_address,
+    port: device.port,
+    username: device.username,
+    password: device.password
+  });
+
+  const result = await client.openDoor(doorNumber, duration);
+
+  if (!result.success) {
+    throw new AppError(result.error || 'فشل فتح الباب', 500);
+  }
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'update',
+    resourceType: 'device',
+    resourceId: deviceId,
+    description: `فتح الباب ${doorNumber} للجهاز: ${device.name}`,
+    newValues: { door_number: doorNumber, duration }
+  });
+
+  return {
+    success: true,
+    message: `تم فتح الباب ${doorNumber} لمدة ${duration} ثواني`
+  };
+}
+
 // Export all functions
 export default {
   getAllDevices,
@@ -774,5 +1246,12 @@ export default {
   getDeviceStatus,
   testConnection,
   syncDevice,
-  activateLiveFaceCapture
+  activateLiveFaceCapture,
+  discoverDevices,
+  getDeviceInfo,
+  syncDeviceTime,
+  pullDeviceLogs,
+  rebootDevice,
+  clearDeviceLogs,
+  openDoor
 };

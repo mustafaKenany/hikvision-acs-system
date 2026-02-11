@@ -240,6 +240,33 @@
         </v-btn>
       </v-card-actions>
     </v-card>
+
+    <!-- Success Dialog -->
+    <v-dialog v-model="successDialog" max-width="400" persistent>
+      <v-card>
+        <v-card-text class="text-center pa-8">
+          <v-icon size="80" color="success" class="mb-4">
+            mdi-check-circle
+          </v-icon>
+          <h2 class="text-h5 mb-3">✅ تم بنجاح!</h2>
+          <p class="text-body-1 mb-2">
+            {{ successMessage }}
+          </p>
+          <v-alert type="info" variant="tonal" class="mt-4 text-start">
+            <div class="text-caption">
+              <v-icon size="small" start>mdi-information</v-icon>
+              قد يستغرق ظهور التعديلات بضع ثوانٍ (حتى 5 ثوانٍ)
+            </div>
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn color="primary" variant="elevated" @click="closeSuccessDialog" block>
+            حسناً
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-dialog>
 </template>
 
@@ -267,6 +294,8 @@ const organizations = ref([])
 const photoInput = ref(null)
 const photoPreview = ref(null)
 const photoFile = ref(null)
+const successDialog = ref(false)
+const successMessage = ref('')
 
 const isEdit = computed(() => !!props.employee?.id)
 
@@ -303,7 +332,7 @@ const rules = {
 const loadOrganizations = async () => {
   loadingOrgs.value = true
   try {
-    const response = await axios.get('/api/organizations')
+    const response = await axios.get('/organizations')
     organizations.value = response.data.data.organizations || []
   } catch (error) {
     console.error('Error loading organizations:', error)
@@ -365,10 +394,10 @@ const saveEmployee = async () => {
     let response
     if (isEdit.value) {
       // Update existing employee
-      response = await axios.put(`/api/employees/${props.employee.id}`, cleanedData)
+      response = await axios.put(`/employees/${props.employee.id}`, cleanedData)
     } else {
       // Create new employee
-      response = await axios.post('/api/employees', cleanedData)
+      response = await axios.post('/employees', cleanedData)
     }
 
     let savedEmployee = response.data.data
@@ -378,7 +407,7 @@ const saveEmployee = async () => {
       try {
         const formData = new FormData()
         formData.append('photo', photoFile.value)
-        const photoResponse = await axios.post(`/api/employees/${savedEmployee.id}/photo`, formData, {
+        const photoResponse = await axios.post(`/employees/${savedEmployee.id}/photo`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         })
         // تحديث بيانات الموظف بالصورة الجديدة
@@ -390,8 +419,14 @@ const saveEmployee = async () => {
       }
     }
 
+    // عرض رسالة نجاح
+    successMessage.value = isEdit.value 
+      ? `تم تحديث بيانات الموظف "${savedEmployee.name}" بنجاح!`
+      : `تمت إضافة الموظف "${savedEmployee.name}" بنجاح!`
+    
     emit('saved', savedEmployee)
     closeDialog()
+    successDialog.value = true
   } catch (error) {
     console.error('Error saving employee:', error)
     console.error('Response data:', error.response?.data)
@@ -430,6 +465,11 @@ const closeDialog = () => {
   dialog.value = false
   formRef.value?.reset()
   removePhoto()
+}
+
+// Close success dialog
+const closeSuccessDialog = () => {
+  successDialog.value = false
 }
 
 // Watch for employee changes

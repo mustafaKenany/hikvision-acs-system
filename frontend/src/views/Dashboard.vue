@@ -50,9 +50,9 @@ const stats = ref([
 onMounted(async () => {
   try {
     const [employees, organizations, devices] = await Promise.all([
-      axios.get('/api/employees'),
-      axios.get('/api/organizations'),
-      axios.get('/api/devices')
+      axios.get('/employees'),
+      axios.get('/organizations'),
+      axios.get('/devices')
     ])
 
     stats.value[0].value = employees.data.data.employees?.length || 0

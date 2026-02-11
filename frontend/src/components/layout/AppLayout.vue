@@ -100,7 +100,8 @@ const menuItems = [
   { title: 'الموظفون', icon: 'mdi-account-group', to: '/employees' },
   { title: 'المنظمات', icon: 'mdi-office-building', to: '/organizations' },
   { title: 'الأجهزة', icon: 'mdi-devices', to: '/devices' },
-  { title: 'سجلات الدخول', icon: 'mdi-history', to: '/access-logs' },
+  { title: 'سجلات الدخول', icon: 'mdi-login', to: '/access-logs' },
+  { title: 'سجل المراجعة', icon: 'mdi-history', to: '/audit-logs' },
   { title: 'المستخدمون', icon: 'mdi-account-cog', to: '/users' },
   { title: 'الإعدادات', icon: 'mdi-cog', to: '/settings' }
 ]

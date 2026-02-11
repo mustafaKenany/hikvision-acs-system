@@ -164,6 +164,99 @@ class DeviceController {
 
     return success(res, result, 'تم تفعيل وضع التقاط الوجه', 200);
   });
+
+  /**
+   * POST /api/devices/discover
+   * Discover Hikvision devices on network
+   */
+  discoverDevices = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const config = req.body; // {ipStart, ipEnd, port, timeout}
+
+    const result = await deviceService.discoverDevices(userId, config);
+
+    return success(res, result, `تم اكتشاف ${result.length} جهاز`, 200);
+  });
+
+  /**
+   * GET /api/devices/:id/info
+   * Get detailed device information
+   */
+  getDeviceInfo = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+
+    const result = await deviceService.getDeviceInfo(userId, deviceId);
+
+    return success(res, result, 'تم جلب معلومات الجهاز بنجاح', 200);
+  });
+
+  /**
+   * POST /api/devices/:id/sync-time
+   * Synchronize device time with server
+   */
+  syncDeviceTime = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+
+    const result = await deviceService.syncDeviceTime(userId, deviceId);
+
+    return success(res, result, 'تم مزامنة وقت الجهاز بنجاح', 200);
+  });
+
+  /**
+   * POST /api/devices/:id/pull-logs
+   * Pull access logs from device
+   */
+  pullDeviceLogs = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+    const filters = req.body; // {startTime, endTime}
+
+    const result = await deviceService.pullDeviceLogs(userId, deviceId, filters);
+
+    return success(res, result, `تم جلب ${result.newLogs} سجل جديد من الجهاز`, 200);
+  });
+
+  /**
+   * POST /api/devices/:id/reboot
+   * Reboot device
+   */
+  rebootDevice = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+
+    const result = await deviceService.rebootDevice(userId, deviceId);
+
+    return success(res, result, 'تم إعادة تشغيل الجهاز بنجاح', 200);
+  });
+
+  /**
+   * POST /api/devices/:id/clear-logs
+   * Clear device logs from memory
+   */
+  clearDeviceLogs = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+
+    const result = await deviceService.clearDeviceLogs(userId, deviceId);
+
+    return success(res, result, 'تم مسح سجلات الجهاز بنجاح', 200);
+  });
+
+  /**
+   * POST /api/devices/:id/open-door
+   * Open door remotely
+   */
+  openDoor = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const deviceId = parseInt(req.params.id);
+    const { doorNumber = 1, duration = 5 } = req.body;
+
+    const result = await deviceService.openDoor(userId, deviceId, doorNumber, duration);
+
+    return success(res, result, 'تم فتح الباب بنجاح', 200);
+  });
 }
 
 export default new DeviceController();

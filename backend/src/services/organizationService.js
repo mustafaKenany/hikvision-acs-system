@@ -9,7 +9,7 @@
  * - Super admin only operations
  */
 
-import { Organization, User, Device, Employee } from '../models/index.js';
+import { Organization, User, Device, Employee, AuditLog } from '../models/index.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import { Op } from 'sequelize';
 
@@ -208,6 +208,16 @@ export async function createOrganization(userId, data) {
     storage_limit_mb: data.storage_limit_mb || limits.storage_limit_mb
   });
 
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'create',
+    resourceType: 'organization',
+    resourceId: organization.id,
+    description: `إنشاء منظمة جديدة: ${organization.name}`,
+    newValues: organization.toJSON()
+  });
+
   return await getOrganizationById(userId, organization.id);
 }
 
@@ -258,14 +268,30 @@ export async function updateOrganization(userId, organizationId, data) {
     data = updateData;
   }
 
+  // Store old values for audit log
+  const oldValues = organization.toJSON();
+
   // Update organization
   await organization.update(data);
+
+  // Log action
+  await AuditLog.logAction({
+    userId,
+    action: 'update',
+    resourceType: 'organization',
+    resourceId: organizationId,
+    description: `تحديث بيانات المنظمة: ${organization.name}`,
+    oldValues,
+    newValues: organization.toJSON()
+  });
 
   return await getOrganizationById(userId, organizationId);
 }
 
 /**
- * Delete organization (soft delete)
+ * Delete organization
+ * - If organization has employees/devices: soft delete (deactivate)
+ * - If organization is empty: hard delete
  * Super admin only
  */
 export async function deleteOrganization(userId, organizationId) {
@@ -280,25 +306,102 @@ export async function deleteOrganization(userId, organizationId) {
     throw new AppError('المؤسسة غير موجودة', 404);
   }
 
-  // Check if organization has active users
-  const activeUsers = await User.count({
-    where: {
-      organization_id: organizationId,
-      is_active: true
-    }
+  // Check if organization has employees or devices
+  const employeesCount = await Employee.count({
+    where: { organization_id: organizationId }
   });
 
-  if (activeUsers > 0) {
-    throw new AppError(`لا يمكن حذف المؤسسة - يوجد ${activeUsers} مستخدم نشط`, 400);
+  const devicesCount = await Device.count({
+    where: { organization_id: organizationId }
+  });
+
+  const hasData = employeesCount > 0 || devicesCount > 0;
+
+  if (hasData) {
+    // Soft delete: Deactivate organization and all related data
+    
+    // Deactivate all users in the organization (except super_admin)
+    await User.update(
+      { is_active: false },
+      {
+        where: {
+          organization_id: organizationId,
+          role: { [Op.ne]: 'super_admin' } // Don't deactivate super_admin
+        }
+      }
+    );
+
+    // Deactivate all employees in the organization
+    await Employee.update(
+      { is_active: false },
+      {
+        where: {
+          organization_id: organizationId
+        }
+      }
+    );
+
+    // Deactivate all devices in the organization
+    await Device.update(
+      { is_active: false },
+      {
+        where: {
+          organization_id: organizationId
+        }
+      }
+    );
+
+    // Deactivate the organization
+    await organization.update({ is_active: false });
+
+    // Log action
+    await AuditLog.logAction({
+      userId,
+      action: 'deactivate',
+      resourceType: 'organization',
+      resourceId: organizationId,
+      description: `تعطيل المنظمة: ${organization.name} (تحتوي على ${employeesCount} موظف و ${devicesCount} جهاز)`,
+      oldValues: { is_active: true },
+      newValues: { is_active: false, employees_count: employeesCount, devices_count: devicesCount }
+    });
+
+    return {
+      type: 'deactivated',
+      message: `تم تعطيل المنظمة لأنها تحتوي على ${employeesCount} موظف و ${devicesCount} جهاز. تم تعطيل جميع البيانات المرتبطة`,
+      organization_id: organizationId,
+      employees_count: employeesCount,
+      devices_count: devicesCount
+    };
+  } else {
+    // Hard delete: Organization is empty
+    
+    // Delete any users (except super_admin - should be none or only inactive)
+    await User.destroy({
+      where: {
+        organization_id: organizationId,
+        role: { [Op.ne]: 'super_admin' } // Don't delete super_admin
+      }
+    });
+
+    // Log action before deletion
+    await AuditLog.logAction({
+      userId,
+      action: 'delete',
+      resourceType: 'organization',
+      resourceId: organizationId,
+      description: `حذف المنظمة نهائياً: ${organization.name} (كانت فارغة)`,
+      oldValues: organization.toJSON()
+    });
+
+    // Delete the organization permanently
+    await organization.destroy();
+
+    return {
+      type: 'deleted',
+      message: 'تم حذف المنظمة نهائياً لأنها كانت فارغة',
+      organization_id: organizationId
+    };
   }
-
-  // Soft delete by deactivating
-  await organization.update({ is_active: false });
-
-  return {
-    message: 'تم تعطيل المؤسسة بنجاح',
-    organization_id: organizationId
-  };
 }
 
 /**

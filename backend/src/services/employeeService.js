@@ -2,9 +2,14 @@ import { Op } from 'sequelize';
 import models from '../models/index.js';
 const { Employee, Organization, FaceTemplate, FingerprintTemplate, CardTemplate, AuditLog, User } = models;
 import { AppError } from '../middlewares/errorHandler.js';
+import CacheService from './cacheService.js';
+
+// Cache TTL from environment or default to 60 seconds (1 minute)
+const CACHE_TTL = parseInt(process.env.CACHE_TTL_EMPLOYEES) || 60;
 
 /**
  * Get all employees with pagination, search, and filters
+ * مع Redis Caching للأداء العالي
  */
 export async function getAllEmployees(
   userId,
@@ -15,6 +20,19 @@ export async function getAllEmployees(
   if (!currentUser) {
     throw new AppError('المستخدم غير موجود', 404);
   }
+
+  // Generate cache key based on filters
+  const organizationId = currentUser.role === 'super_admin' ? 'all' : currentUser.organization_id;
+  const cacheKey = `org:${organizationId}:employees:page:${page}:limit:${limit}:search:${search}:dept:${department}:active:${is_active}:sort:${sort_by}:${sort_order}`;
+
+  // Try to get from cache
+  const cached = await CacheService.get(cacheKey);
+  if (cached) {
+    console.log(`🎯 Cache HIT: Employees list for org ${organizationId}`);
+    return cached;
+  }
+
+  console.log(`💨 Cache MISS: Fetching employees from database...`);
 
   const whereClause = {};
 
@@ -77,8 +95,10 @@ export async function getAllEmployees(
         CardTemplate.count({ where: { employee_id: emp.id } })
       ]);
 
+      const empData = emp.toJSON();
       return {
-        ...emp.toJSON(),
+        ...empData,
+        organization_name: empData.organization?.name || null,
         biometric_counts: {
           faces: faceCount,
           fingerprints: fingerprintCount,
@@ -88,7 +108,7 @@ export async function getAllEmployees(
     })
   );
 
-  return {
+  const result = {
     employees: employeesWithCounts,
     pagination: {
       total: count,
@@ -97,6 +117,12 @@ export async function getAllEmployees(
       total_pages: Math.ceil(count / limit)
     }
   };
+
+  // Cache the result
+  await CacheService.set(cacheKey, result, CACHE_TTL);
+  console.log(`✅ Cached employees list for org ${organizationId} (TTL: ${CACHE_TTL}s)`);
+
+  return result;
 }
 
 /**
@@ -142,7 +168,12 @@ export async function getEmployeeById(requesterId, employeeId) {
     throw new AppError('غير مصرح لك بالوصول إلى هذا الموظف', 403);
   }
 
-  return employee;
+  // Return with organization_name
+  const empData = employee.toJSON();
+  return {
+    ...empData,
+    organization_name: empData.organization?.name || null
+  };
 }
 
 /**
@@ -240,14 +271,14 @@ export async function createEmployee(creatorId, employeeData, ipAddress) {
   });
 
   // Create audit log
-  await AuditLog.create({
-    user_id: creatorId,
+  await AuditLog.logAction({
+    userId: creatorId,
     action: 'create',
-    resource_type: 'Employee',
-    resource_id: newEmployee.id,
-    description: `تم إنشاء موظف جديد: ${name} (${employee_no})`,
-    ip_address: ipAddress,
-    new_values: {
+    resourceType: 'employee',
+    resourceId: newEmployee.id,
+    description: `إضافة موظف جديد: ${name} (${employee_no})`,
+    ipAddress: ipAddress,
+    newValues: {
       employee_no,
       name,
       name_ar,
@@ -268,7 +299,16 @@ export async function createEmployee(creatorId, employeeData, ipAddress) {
     ]
   });
 
-  return employeeWithOrg;
+  // Invalidate cache for this organization
+  await CacheService.invalidateOrganization(targetOrgId, 'employees');
+  console.log(`🗑️ Cache cleared for organization ${targetOrgId} after employee creation`);
+
+  // Return with organization_name
+  const empData = employeeWithOrg.toJSON();
+  return {
+    ...empData,
+    organization_name: empData.organization?.name || null
+  };
 }
 
 /**
@@ -344,15 +384,15 @@ export async function updateEmployee(updaterId, employeeId, updateData, ipAddres
   await targetEmployee.update(updates);
 
   // Create audit log
-  await AuditLog.create({
-    user_id: updaterId,
+  await AuditLog.logAction({
+    userId: updaterId,
     action: 'update',
-    resource_type: 'Employee',
-    resource_id: employeeId,
-    description: `تم تحديث بيانات الموظف: ${targetEmployee.name} (${targetEmployee.employee_no})`,
-    ip_address: ipAddress,
-    old_values: oldValues,
-    new_values: updates
+    resourceType: 'employee',
+    resourceId: employeeId,
+    description: `تحديث بيانات الموظف: ${targetEmployee.name} (${targetEmployee.employee_no})`,
+    ipAddress: ipAddress,
+    oldValues: oldValues,
+    newValues: updates
   });
 
   // Return updated employee with organization
@@ -366,7 +406,16 @@ export async function updateEmployee(updaterId, employeeId, updateData, ipAddres
     ]
   });
 
-  return updatedEmployee;
+  // Invalidate cache for this organization
+  await CacheService.invalidateOrganization(targetEmployee.organization_id, 'employees');
+  console.log(`🗑️ Cache cleared for organization ${targetEmployee.organization_id} after employee update`);
+
+  // Return with organization_name
+  const empData = updatedEmployee.toJSON();
+  return {
+    ...empData,
+    organization_name: empData.organization?.name || null
+  };
 }
 
 /**
@@ -401,19 +450,22 @@ export async function deleteEmployee(deleterId, employeeId, ipAddress) {
   };
 
   // Create audit log BEFORE deleting
-  await AuditLog.create({
-    user_id: deleterId,
+  await AuditLog.logAction({
+    userId: deleterId,
     action: 'delete',
-    resource_type: 'Employee',
-    resource_id: employeeId,
-    description: `تم حذف الموظف: ${targetEmployee.name} (${targetEmployee.employee_no})`,
-    ip_address: ipAddress,
-    old_values: employeeData,
-    new_values: null
+    resourceType: 'employee',
+    resourceId: employeeId,
+    description: `حذف الموظف: ${targetEmployee.name} (${targetEmployee.employee_no})`,
+    ipAddress: ipAddress,
+    oldValues: employeeData
   });
 
   // Hard delete (actual deletion from database)
   await targetEmployee.destroy();
+
+  // Invalidate cache for this organization
+  await CacheService.invalidateOrganization(employeeData.organization_id, 'employees');
+  console.log(`🗑️ Cache cleared for organization ${employeeData.organization_id} after employee deletion`);
 
   return { message: 'تم حذف الموظف بنجاح' };
 }
@@ -444,15 +496,20 @@ export async function activateEmployee(userId, employeeId, ipAddress) {
   await employee.update({ is_active: true });
 
   // Create audit log
-  await AuditLog.create({
-    user_id: userId,
+  await AuditLog.logAction({
+    userId: userId,
     action: 'update',
-    resource_type: 'Employee',
-    resource_id: employeeId,
-    description: `تم تفعيل الموظف: ${employee.name} (${employee.employee_no})`,
-    ip_address: ipAddress,
-    new_values: { is_active: true }
+    resourceType: 'employee',
+    resourceId: employeeId,
+    description: `تفعيل الموظف: ${employee.name} (${employee.employee_no})`,
+    ipAddress: ipAddress,
+    oldValues: { is_active: false },
+    newValues: { is_active: true }
   });
+
+  // Invalidate cache
+  await CacheService.invalidateOrganization(employee.organization_id, 'employees');
+  console.log(`🗑️ Cache cleared for organization ${employee.organization_id} after employee activation`);
 
   return employee;
 }
@@ -483,15 +540,20 @@ export async function deactivateEmployee(userId, employeeId, ipAddress) {
   await employee.update({ is_active: false });
 
   // Create audit log
-  await AuditLog.create({
-    user_id: userId,
+  await AuditLog.logAction({
+    userId: userId,
     action: 'update',
-    resource_type: 'Employee',
-    resource_id: employeeId,
-    description: `تم تعطيل الموظف: ${employee.name} (${employee.employee_no})`,
-    ip_address: ipAddress,
-    new_values: { is_active: false }
+    resourceType: 'employee',
+    resourceId: employeeId,
+    description: `تعطيل الموظف: ${employee.name} (${employee.employee_no})`,
+    ipAddress: ipAddress,
+    oldValues: { is_active: true },
+    newValues: { is_active: false }
   });
+
+  // Invalidate cache
+  await CacheService.invalidateOrganization(employee.organization_id, 'employees');
+  console.log(`🗑️ Cache cleared for organization ${employee.organization_id} after employee deactivation`);
 
   return employee;
 }
@@ -652,19 +714,15 @@ export async function updateEmployeePhoto(userId, employeeId, photoUrl, ipAddres
   await employee.update({ photo_url: photoUrl });
 
   // Log the action
-  await AuditLog.create({
-    user_id: userId,
-    organization_id: user.organization_id,
-    action: photoUrl ? 'update' : 'delete',
-    resource_type: 'employee',
-    resource_id: employeeId,
-    description: photoUrl ? `تحميل صورة للموظف ${employee.name}` : `حذف صورة الموظف ${employee.name}`,
-    details: {
-      employee_id: employee.id,
-      employee_name: employee.name,
-      photo_url: photoUrl
-    },
-    ip_address: ipAddress
+  await AuditLog.logAction({
+    userId: userId,
+    action: 'update',
+    resourceType: 'employee',
+    resourceId: employeeId,
+    description: photoUrl ? `تحديث صورة الموظف: ${employee.name}` : `حذف صورة الموظف: ${employee.name}`,
+    ipAddress: ipAddress,
+    oldValues: { photo_url: employee.photo_url },
+    newValues: { photo_url: photoUrl }
   });
 
   return await getEmployeeById(userId, employeeId);

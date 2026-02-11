@@ -477,6 +477,33 @@
         </v-btn>
       </template>
     </v-snackbar>
+
+    <!-- Success Dialog -->
+    <v-dialog v-model="successDialog" max-width="400" persistent>
+      <v-card>
+        <v-card-text class="text-center pa-8">
+          <v-icon :size="80" :color="successIcon.color" class="mb-4">
+            {{ successIcon.icon }}
+          </v-icon>
+          <h2 class="text-h5 mb-3">✅ {{ successTitle }}</h2>
+          <p class="text-body-1 mb-2">
+            {{ successMessage }}
+          </p>
+          <v-alert type="info" variant="tonal" class="mt-4 text-start">
+            <div class="text-caption">
+              <v-icon size="small" start>mdi-information</v-icon>
+              قد يستغرق ظهور التغييرات بضع ثوانٍ (حتى 5 ثوانٍ)
+            </div>
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn color="primary" variant="elevated" @click="successDialog = false" block>
+            حسناً
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -498,6 +525,10 @@ const deleting = ref(false)
 const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
+const successDialog = ref(false)
+const successTitle = ref('')
+const successMessage = ref('')
+const successIcon = ref({ icon: 'mdi-check-circle', color: 'success' })
 
 // Statistics
 const stats = ref({
@@ -592,7 +623,7 @@ const filteredEmployees = computed(() => {
 const loadEmployees = async () => {
   loading.value = true
   try {
-    const response = await axios.get('/api/employees')
+    const response = await axios.get('/employees')
     employees.value = response.data.data.employees || []
     calculateStats()
   } catch (error) {
@@ -607,7 +638,7 @@ const loadEmployees = async () => {
 // Load organizations
 const loadOrganizations = async () => {
   try {
-    const response = await axios.get('/api/organizations')
+    const response = await axios.get('/organizations')
     organizations.value = response.data.data.organizations || []
   } catch (error) {
     console.error('Error loading organizations:', error)
@@ -617,7 +648,7 @@ const loadOrganizations = async () => {
 // Load departments
 const loadDepartments = async () => {
   try {
-    const response = await axios.get('/api/employees/departments/list')
+    const response = await axios.get('/employees/departments/list')
     departments.value = response.data.data.departments || []
   } catch (error) {
     console.error('Error loading departments:', error)
@@ -830,7 +861,7 @@ const openSyncDialog = async (employee) => {
   syncResults.value = []
   
   try {
-    const response = await axios.get('/api/devices')
+    const response = await axios.get('/devices')
     devices.value = response.data.data.devices || []
   } catch (error) {
     console.error('Error loading devices:', error)
@@ -850,7 +881,7 @@ const syncToDevices = async () => {
       const device = devices.value.find(d => d.id === deviceId)
       
       try {
-        await axios.post(`/api/devices/${deviceId}/sync`, {
+        await axios.post(`/devices/${deviceId}/sync`, {
           employee_ids: [selectedEmployee.value.id]
         })
         
@@ -893,20 +924,48 @@ const openEditDialog = (employee) => {
 
 // On employee saved
 const onEmployeeSaved = () => {
-  loadEmployees()
-  showSnackbar(selectedEmployee.value ? 'تم تحديث الموظف بنجاح' : 'تمت إضافة الموظف بنجاح', 'success')
+  // إضافة تأخير بسيط (2 ثانية) لإعطاء الكاش وقت للتحديث
+  setTimeout(() => {
+    loadEmployees()
+  }, 2000)
 }
 
 // Toggle activation
 const toggleActivation = async (employee) => {
   try {
     const endpoint = employee.is_active ? 'deactivate' : 'activate'
-    await axios.post(`/api/employees/${employee.id}/${endpoint}`)
-    await loadEmployees()
-    showSnackbar(`تم ${employee.is_active ? 'تعطيل' : 'تفعيل'} الموظف بنجاح`, 'success')
+    const newStatus = !employee.is_active
+    
+    await axios.post(`/employees/${employee.id}/${endpoint}`)
+    
+    // Optimistic Update - تحديث الحالة مباشرة في القائمة
+    const index = employees.value.findIndex(e => e.id === employee.id)
+    if (index > -1) {
+      employees.value[index].is_active = newStatus
+    }
+    
+    // إعادة حساب الإحصائيات
+    calculateStats()
+    
+    // عرض رسالة نجاح
+    successTitle.value = employee.is_active ? 'تم التعطيل!' : 'تم التفعيل!'
+    successMessage.value = employee.is_active 
+      ? `تم تعطيل الموظف "${employee.name}" بنجاح`
+      : `تم تفعيل الموظف "${employee.name}" بنجاح`
+    successIcon.value = employee.is_active 
+      ? { icon: 'mdi-account-off', color: 'warning' }
+      : { icon: 'mdi-account-check', color: 'success' }
+    successDialog.value = true
+    
+    // إعادة تحميل البيانات من السيرفر بعد تأخير بسيط للتأكد
+    setTimeout(() => {
+      loadEmployees()
+    }, 2000)
   } catch (error) {
     console.error('Error toggling activation:', error)
     showSnackbar('حدث خطأ أثناء تغيير الحالة', 'error')
+    // إعادة تحميل البيانات في حالة الخطأ
+    await loadEmployees()
   }
 }
 
@@ -922,10 +981,11 @@ const deleteEmployee = async () => {
 
   deleting.value = true
   try {
-    await axios.delete(`/api/employees/${employeeToDelete.value.id}`)
+    await axios.delete(`/employees/${employeeToDelete.value.id}`)
     
     // إزالة الموظف من القائمة مباشرة (Optimistic Update)
     const index = employees.value.findIndex(e => e.id === employeeToDelete.value.id)
+    const deletedName = employeeToDelete.value.name
     if (index > -1) {
       employees.value.splice(index, 1)
     }
@@ -935,7 +995,12 @@ const deleteEmployee = async () => {
     
     deleteDialog.value = false
     employeeToDelete.value = null
-    showSnackbar('تم حذف الموظف بنجاح', 'success')
+    
+    // عرض رسالة نجاح
+    successTitle.value = 'تم الحذف!'
+    successMessage.value = `تم حذف الموظف "${deletedName}" بنجاح`
+    successIcon.value = { icon: 'mdi-delete-circle', color: 'error' }
+    successDialog.value = true
     
     // إعادة تحميل البيانات من السيرفر للتأكد
     await loadEmployees()

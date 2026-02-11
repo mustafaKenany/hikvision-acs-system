@@ -162,4 +162,86 @@ router.post(
   deviceController.activateLiveCapture
 );
 
+/**
+ * @route   POST /api/devices/discover
+ * @desc    Discover Hikvision devices on network
+ * @access  Private - Admin, Manager
+ */
+router.post(
+  '/discover',
+  authorize(['super_admin', 'admin', 'manager']),
+  deviceController.discoverDevices
+);
+
+/**
+ * @route   GET /api/devices/:id/info
+ * @desc    Get detailed device information including specs
+ * @access  Private - All authenticated users
+ */
+router.get(
+  '/:id/info',
+  deviceIdValidator,
+  deviceController.getDeviceInfo
+);
+
+/**
+ * @route   POST /api/devices/:id/sync-time
+ * @desc    Synchronize device time with server
+ * @access  Private - Admin, Manager
+ */
+router.post(
+  '/:id/sync-time',
+  authorize(['super_admin', 'admin', 'manager']),
+  deviceIdValidator,
+  deviceController.syncDeviceTime
+);
+
+/**
+ * @route   POST /api/devices/:id/pull-logs
+ * @desc    Pull access logs from device
+ * @access  Private - Admin, Manager
+ */
+router.post(
+  '/:id/pull-logs',
+  authorize(['super_admin', 'admin', 'manager']),
+  deviceIdValidator,
+  deviceController.pullDeviceLogs
+);
+
+/**
+ * @route   POST /api/devices/:id/reboot
+ * @desc    Reboot device
+ * @access  Private - Admin only
+ */
+router.post(
+  '/:id/reboot',
+  authorize(['super_admin', 'admin']),
+  deviceIdValidator,
+  deviceController.rebootDevice
+);
+
+/**
+ * @route   POST /api/devices/:id/clear-logs
+ * @desc    Clear device logs from memory
+ * @access  Private - Admin only
+ */
+router.post(
+  '/:id/clear-logs',
+  authorize(['super_admin', 'admin']),
+  deviceIdValidator,
+  deviceController.clearDeviceLogs
+);
+
+/**
+ * @route   POST /api/devices/:id/open-door
+ * @desc    Open door remotely
+ * @access  Private - Admin, Manager
+ */
+router.post(
+  '/:id/open-door',
+  authorize(['super_admin', 'admin', 'manager']),
+  deviceIdValidator,
+  deviceController.openDoor
+);
+
 export default router;

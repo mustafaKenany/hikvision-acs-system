@@ -25,7 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
   
   async function login(email, password) {
     try {
-      const response = await axios.post('/api/auth/login', { email, password })
+      const response = await axios.post('/auth/login', { email, password })
       const { user: userData, tokens } = response.data.data
       
       // حفظ البيانات
