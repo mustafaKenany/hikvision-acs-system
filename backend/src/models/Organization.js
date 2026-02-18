@@ -95,11 +95,9 @@ class Organization extends Model {
         tableName: 'organizations',
         timestamps: true,
         underscored: true,
-        indexes: [
-          { fields: ['email'], unique: true },
-          { fields: ['subscription_plan'] },
-          { fields: ['is_active'] },
-        ],
+        // Indexes are managed by migrations (20260215-add-organization-indexes.js)
+        // This prevents Sequelize from creating duplicate indexes
+        indexes: []
       }
     );
   }

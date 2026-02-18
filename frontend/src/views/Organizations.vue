@@ -139,6 +139,38 @@
 
     <!-- Data Table -->
     <v-card>
+      <!-- Bulk Actions Toolbar -->
+      <v-slide-y-transition>
+        <v-toolbar v-if="selected.length > 0" color="primary" dark>
+          <v-toolbar-title>
+            <v-icon start>mdi-checkbox-marked-circle</v-icon>
+            تم تحديد {{ selected.length }} منظمة
+          </v-toolbar-title>
+          
+          <v-spacer />
+          
+          <v-btn icon="mdi-check-all" @click="bulkActivate" title="تفعيل الكل">
+            <v-icon>mdi-check-all</v-icon>
+          </v-btn>
+          
+          <v-btn icon="mdi-cancel" @click="bulkDeactivate" title="إلغاء تفعيل الكل">
+            <v-icon>mdi-cancel</v-icon>
+          </v-btn>
+          
+          <v-btn icon="mdi-file-excel" @click="exportSelected" title="تصدير">
+            <v-icon>mdi-file-excel</v-icon>
+          </v-btn>
+          
+          <v-btn icon="mdi-delete" @click="bulkDelete" title="حذف">
+            <v-icon>mdi-delete</v-icon>
+          </v-btn>
+          
+          <v-btn icon="mdi-close" @click="selected = []" title="إلغاء التحديد">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-toolbar>
+      </v-slide-y-transition>
+
       <v-card-title class="d-flex justify-space-between align-center">
         <span>قائمة المنظمات</span>
         <div>
@@ -163,9 +195,12 @@
       </v-card-title>
 
       <v-data-table
+        v-model="selected"
         :headers="headers"
         :items="filteredOrganizations"
         :loading="loading"
+        show-select
+        item-value="id"
         loading-text="جاري التحميل..."
         no-data-text="لا توجد بيانات"
         items-per-page="10"
@@ -385,7 +420,10 @@
         </v-card-title>
         <v-card-text class="pt-4">
           <v-alert type="warning" variant="tonal" class="mb-4">
-            <div class="mb-2">
+            <div class="mb-2" v-if="bulkDeleteMode">
+              هل أنت متأكد من حذف <strong>{{ organizationsToDelete.length }}</strong> منظمة؟
+            </div>
+            <div class="mb-2" v-else-if="organizationToDelete">
               هل أنت متأكد من حذف المنظمة <strong>{{ organizationToDelete?.name }}</strong>؟
             </div>
             <div class="text-caption">
@@ -430,15 +468,19 @@ import OrganizationDialog from '@/components/dialogs/OrganizationDialog.vue'
 import SubscriptionDialog from '@/components/dialogs/SubscriptionDialog.vue'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
+import { exportOrganizationsToExcel, exportOrganizationsToPDF } from '@/utils/exportUtils'
 
 const loading = ref(true)
 const organizations = ref([])
+const selected = ref([])
 const dialogOpen = ref(false)
 const subscriptionDialogOpen = ref(false)
 const detailsDialog = ref(false)
 const selectedOrganization = ref(null)
 const deleteDialog = ref(false)
 const organizationToDelete = ref(null)
+const bulkDeleteMode = ref(false)
+const organizationsToDelete = ref([])
 const deleting = ref(false)
 const snackbar = ref(false)
 const snackbarText = ref('')
@@ -472,14 +514,14 @@ const statusOptions = [
 ]
 
 const headers = [
-  { title: 'الشعار', key: 'logo_url', sortable: false, align: 'center' },
-  { title: 'الاسم', key: 'name', align: 'start' },
-  { title: 'البريد الإلكتروني', key: 'email' },
-  { title: 'الهاتف', key: 'phone' },
-  { title: 'خطة الاشتراك', key: 'subscription_plan' },
-  { title: 'تاريخ الانتهاء', key: 'subscription_end' },
-  { title: 'الحالة', key: 'is_active', align: 'center' },
-  { title: 'الإجراءات', key: 'actions', sortable: false, align: 'center' }
+  { title: 'الشعار', key: 'logo_url', sortable: false, align: 'center', width: '80px' },
+  { title: 'الاسم', key: 'name', align: 'start', width: '200px' },
+  { title: 'البريد الإلكتروني', key: 'email', width: '200px' },
+  { title: 'الهاتف', key: 'phone', width: '130px' },
+  { title: 'خطة الاشتراك', key: 'subscription_plan', width: '120px' },
+  { title: 'تاريخ الانتهاء', key: 'subscription_end', width: '130px' },
+  { title: 'الحالة', key: 'is_active', align: 'center', width: '100px' },
+  { title: 'الإجراءات', key: 'actions', sortable: false, align: 'center', width: '180px' }
 ]
 
 // Computed filtered organizations
@@ -560,30 +602,14 @@ const applyFilters = () => {
 
 // Export to Excel
 const exportToExcel = () => {
-  const csv = [
-    ['الاسم', 'البريد', 'الهاتف', 'العنوان', 'خطة الاشتراك', 'الحالة'],
-    ...filteredOrganizations.value.map(org => [
-      org.name,
-      org.email,
-      org.phone || '',
-      org.address || '',
-      getSubscriptionText(org.subscription_plan),
-      org.is_active ? 'نشطة' : 'غير نشطة'
-    ])
-  ].map(row => row.join(',')).join('\n')
-
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `organizations_${new Date().toISOString().split('T')[0]}.csv`
-  link.click()
-  showSnackbar('تم تصدير البيانات إلى Excel', 'success')
+  const result = exportOrganizationsToExcel(filteredOrganizations.value)
+  showSnackbar(result.message, result.success ? 'success' : 'error')
 }
 
 // Export to PDF
 const exportToPDF = () => {
-  window.print()
-  showSnackbar('جاري طباعة التقرير...', 'info')
+  const result = exportOrganizationsToPDF(filteredOrganizations.value, stats.value)
+  showSnackbar(result.message, result.success ? 'success' : 'error')
 }
 
 // Open add dialog
@@ -611,15 +637,17 @@ const openSubscriptionDialog = (organization) => {
 }
 
 // On organization saved
-const onOrganizationSaved = () => {
-  loadOrganizations()
-  showSnackbar('تم حفظ البيانات بنجاح', 'success')
+const onOrganizationSaved = (data) => {
+  // عرض toast notification
+  showSnackbar(data?.message || 'تم الحفظ بنجاح!', 'success')
+  // إعادة تحميل البيانات بعد ثانيتين (للانتظار حتى ينتهي cache invalidation)
+  setTimeout(() => loadOrganizations(), 2000)
 }
 
 // On subscription updated
 const onSubscriptionUpdated = () => {
-  loadOrganizations()
   showSnackbar('تم تحديث الاشتراك بنجاح', 'success')
+  setTimeout(() => loadOrganizations(), 2000)
 }
 
 // Toggle activation
@@ -639,50 +667,85 @@ const toggleActivation = async (organization) => {
 const confirmDelete = (organization) => {
   console.log('⚠️ Confirm delete for:', organization)
   organizationToDelete.value = organization
+  bulkDeleteMode.value = false
   deleteDialog.value = true
+}
+
+// Bulk delete
+const bulkDelete = () => {
+  organizationsToDelete.value = selected.value
+  bulkDeleteMode.value = true
+  deleteDialog.value = true
+}
+
+// Bulk activate
+const bulkActivate = async () => {
+  try {
+    await Promise.all(
+      selected.value.map(orgId => axios.post(`/organizations/${orgId}/activate`))
+    )
+    showSnackbar(`تم تفعيل ${selected.value.length} منظمة`, 'success')
+    selected.value = []
+    await loadOrganizations()
+  } catch (error) {
+    showSnackbar('حدث خطأ في التفعيل الجماعي', 'error')
+  }
+}
+
+// Bulk deactivate
+const bulkDeactivate = async () => {
+  try {
+    await Promise.all(
+      selected.value.map(orgId => axios.post(`/organizations/${orgId}/deactivate`))
+    )
+    showSnackbar(`تم إلغاء تفعيل ${selected.value.length} منظمة`, 'success')
+    selected.value = []
+    await loadOrganizations()
+  } catch (error) {
+    showSnackbar('حدث خطأ في إلغاء التفعيل الجماعي', 'error')
+  }
+}
+
+// Export selected
+const exportSelected = () => {
+  const selectedOrgs = organizations.value.filter(org => selected.value.includes(org.id))
+  const result = exportOrganizationsToExcel(selectedOrgs, 'selected_organizations')
+  showSnackbar(result.message, result.success ? 'success' : 'error')
+  selected.value = []
 }
 
 // Delete organization
 const deleteOrganization = async () => {
-  if (!organizationToDelete.value) return
-
-  console.log('🗑️ Deleting organization:', organizationToDelete.value)
   deleting.value = true
+  
   try {
-    const response = await axios.delete(`/organizations/${organizationToDelete.value.id}`)
-    console.log('✅ Delete API response:', response)
-    
-    // Check the type of deletion
-    const resultType = response.data?.data?.type || 'deleted'
-    const message = response.data?.data?.message || 'تم حذف المنظمة بنجاح'
-    
-    const index = organizations.value.findIndex(o => o.id === organizationToDelete.value.id)
-    console.log('📍 Found at index:', index)
-    
-    if (index > -1) {
-      if (resultType === 'deleted') {
-        // Hard delete - remove from array
-        organizations.value.splice(index, 1)
-        console.log('✅ Removed from array. New count:', organizations.value.length)
-      } else if (resultType === 'deactivated') {
-        // Soft delete - update status
-        organizations.value[index].is_active = false
-        console.log('✅ Deactivated organization')
-      }
+    if (bulkDeleteMode.value) {
+      // Bulk delete - organizationsToDelete contains IDs
+      await Promise.all(
+        organizationsToDelete.value.map(orgId => axios.delete(`/organizations/${orgId}`))
+      )
+      showSnackbar(`تم حذف ${organizationsToDelete.value.length} منظمة`, 'success')
+      selected.value = []
+    } else {
+      // Single delete
+      if (!organizationToDelete.value) return
+      
+      const response = await axios.delete(`/organizations/${organizationToDelete.value.id}`)
+      
+      // Check the type of deletion
+      const resultType = response.data?.data?.type || 'deleted'
+      const message = response.data?.data?.message || 'تم حذف المنظمة بنجاح'
+      
+      showSnackbar(message, resultType === 'deleted' ? 'success' : 'info')
     }
     
-    calculateStats()
     deleteDialog.value = false
     organizationToDelete.value = null
-    
-    // Show appropriate message
-    showSnackbar(message, resultType === 'deleted' ? 'success' : 'info')
     
     // Reload to ensure sync with server
     await loadOrganizations()
   } catch (error) {
     console.error('❌ Error deleting organization:', error)
-    console.error('❌ Error response:', error.response?.data)
     const errorMsg = error.response?.data?.error || error.response?.data?.message || 'حدث خطأ أثناء حذف المنظمة'
     showSnackbar(errorMsg, 'error')
     await loadOrganizations()

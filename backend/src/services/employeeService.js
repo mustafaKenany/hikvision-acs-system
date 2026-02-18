@@ -177,6 +177,53 @@ export async function getEmployeeById(requesterId, employeeId) {
 }
 
 /**
+ * Generate auto-incremented employee number
+ */
+async function generateEmployeeNo(organizationId) {
+  // Get the last employee number for this organization
+  const lastEmployee = await Employee.findOne({
+    where: { organization_id: organizationId },
+    order: [['id', 'DESC']],
+    attributes: ['employee_no']
+  });
+
+  if (!lastEmployee) {
+    // First employee in organization
+    return 'EMP-00001';
+  }
+
+  // Extract number from last employee_no (format: EMP-00001)
+  const lastNumber = parseInt(lastEmployee.employee_no.split('-')[1]) || 0;
+  const newNumber = lastNumber + 1;
+  
+  // Format with leading zeros (5 digits)
+  return `EMP-${String(newNumber).padStart(5, '0')}`;
+}
+
+/**
+ * Validate full name (triple name preferred)
+ */
+function validateFullName(name) {
+  const nameParts = name.trim().split(/\s+/);
+  
+  if (nameParts.length < 2) {
+    return { 
+      valid: false, 
+      message: 'الرجاء إدخال الاسم الكامل (الاسم الأول والأخير على الأقل)' 
+    };
+  }
+  
+  if (nameParts.length === 2) {
+    return { 
+      valid: true, 
+      warning: 'يفضل إدخال الاسم الثلاثي (الاسم الأول واسم الأب والعائلة)' 
+    };
+  }
+  
+  return { valid: true };
+}
+
+/**
  * Create new employee
  */
 export async function createEmployee(creatorId, employeeData, ipAddress) {
@@ -186,7 +233,6 @@ export async function createEmployee(creatorId, employeeData, ipAddress) {
   }
 
   const {
-    employee_no,
     name,
     name_ar,
     email,
@@ -203,11 +249,15 @@ export async function createEmployee(creatorId, employeeData, ipAddress) {
 
   // Validate required fields
   const validationErrors = [];
-  if (!employee_no || employee_no.trim() === '') {
-    validationErrors.push({ field: 'employee_no', message: 'رقم الموظف مطلوب' });
-  }
+  
   if (!name || name.trim() === '') {
     validationErrors.push({ field: 'name', message: 'الاسم بالإنجليزي مطلوب' });
+  } else {
+    // Validate full name format
+    const nameValidation = validateFullName(name);
+    if (!nameValidation.valid) {
+      validationErrors.push({ field: 'name', message: nameValidation.message });
+    }
   }
   
   if (validationErrors.length > 0) {
@@ -241,26 +291,48 @@ export async function createEmployee(creatorId, employeeData, ipAddress) {
     throw new AppError('تم الوصول للحد الأقصى لعدد الموظفين في هذه المؤسسة', 403);
   }
 
-  // Check if employee_no already exists in this organization
-  const existingEmployee = await Employee.findOne({
-    where: {
-      organization_id: targetOrgId,
-      employee_no: employee_no
-    }
+  // Check for duplicate name
+  const existingName = await Employee.findOne({
+    where: { name: name.trim() }
   });
-
-  if (existingEmployee) {
-    throw new AppError('رقم الموظف موجود مسبقاً في هذه المؤسسة', 409);
+  
+  if (existingName) {
+    throw new AppError('الاسم موجود مسبقاً. الرجاء إدخال اسم مختلف أو إضافة رقم الهاتف للتمييز', 409);
   }
+
+  // Check for duplicate phone (if provided)
+  if (phone && phone.trim() !== '') {
+    const existingPhone = await Employee.findOne({
+      where: { phone: phone.trim() }
+    });
+    
+    if (existingPhone) {
+      throw new AppError('رقم الهاتف مستخدم مسبقاً', 409);
+    }
+  }
+
+  // Check for duplicate email (if provided)
+  if (email && email.trim() !== '') {
+    const existingEmail = await Employee.findOne({
+      where: { email: email.trim().toLowerCase() }
+    });
+    
+    if (existingEmail) {
+      throw new AppError('البريد الإلكتروني مستخدم مسبقاً', 409);
+    }
+  }
+
+  // Auto-generate employee number
+  const employee_no = await generateEmployeeNo(targetOrgId);
 
   // Create employee
   const newEmployee = await Employee.create({
     organization_id: targetOrgId,
     employee_no,
-    name,
-    name_ar,
-    email,
-    phone,
+    name: name.trim(),
+    name_ar: name_ar?.trim() || null,
+    email: email?.trim().toLowerCase() || null,
+    phone: phone?.trim() || null,
     department,
     position,
     photo_url,
@@ -365,19 +437,58 @@ export async function updateEmployee(updaterId, employeeId, updateData, ipAddres
     }
   });
 
-  // Check if employee_no is being changed
-  if (updateData.employee_no && updateData.employee_no !== targetEmployee.employee_no) {
-    const existingEmployee = await Employee.findOne({
+  // Validate name if being changed
+  if (updateData.name && updateData.name !== targetEmployee.name) {
+    const nameValidation = validateFullName(updateData.name);
+    if (!nameValidation.valid) {
+      throw new AppError(nameValidation.message, 400);
+    }
+
+    // Check for duplicate name
+    const existingName = await Employee.findOne({
       where: {
-        organization_id: targetEmployee.organization_id,
-        employee_no: updateData.employee_no,
+        name: updateData.name.trim(),
         id: { [Op.ne]: employeeId }
       }
     });
-    if (existingEmployee) {
-      throw new AppError('رقم الموظف موجود مسبقاً في هذه المؤسسة', 409);
+    
+    if (existingName) {
+      throw new AppError('الاسم موجود مسبقاً. الرجاء إدخال اسم مختلف', 409);
     }
-    updates.employee_no = updateData.employee_no;
+
+    updates.name = updateData.name.trim();
+  }
+
+  // Validate phone if being changed
+  if (updateData.phone && updateData.phone !== targetEmployee.phone) {
+    const existingPhone = await Employee.findOne({
+      where: {
+        phone: updateData.phone.trim(),
+        id: { [Op.ne]: employeeId }
+      }
+    });
+    
+    if (existingPhone) {
+      throw new AppError('رقم الهاتف مستخدم مسبقاً', 409);
+    }
+
+    updates.phone = updateData.phone.trim();
+  }
+
+  // Validate email if being changed
+  if (updateData.email && updateData.email !== targetEmployee.email) {
+    const existingEmail = await Employee.findOne({
+      where: {
+        email: updateData.email.trim().toLowerCase(),
+        id: { [Op.ne]: employeeId }
+      }
+    });
+    
+    if (existingEmail) {
+      throw new AppError('البريد الإلكتروني مستخدم مسبقاً', 409);
+    }
+
+    updates.email = updateData.email.trim().toLowerCase();
   }
 
   // Update employee

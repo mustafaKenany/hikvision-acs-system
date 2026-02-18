@@ -7,11 +7,13 @@
  * - Subscription management
  * - Organization settings & limits
  * - Super admin only operations
+ * - Redis caching for performance
  */
 
 import { Organization, User, Device, Employee, AuditLog } from '../models/index.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import { Op } from 'sequelize';
+import CacheService from './cacheService.js';
 
 /**
  * Get all organizations with filtering, pagination, and search
@@ -33,6 +35,16 @@ export async function getAllOrganizations(userId, filters = {}) {
   if (!user || user.role !== 'super_admin') {
     throw new AppError('غير مصرح - يجب أن تكون super admin', 403);
   }
+
+  // Try cache first
+  const cacheKey = `organizations:all:${JSON.stringify(filters)}`;
+  const cached = await CacheService.get(cacheKey);
+  if (cached) {
+    console.log(`✅ Cache HIT for organizations list`);
+    return cached;
+  }
+
+  console.log(`❌ Cache MISS for organizations list - fetching from DB`);
 
   // Build where clause
   const whereClause = {};
@@ -97,7 +109,7 @@ export async function getAllOrganizations(userId, filters = {}) {
     })
   );
 
-  return {
+  const result = {
     organizations: organizationsWithStats,
     pagination: {
       total: count,
@@ -106,6 +118,12 @@ export async function getAllOrganizations(userId, filters = {}) {
       limit: parseInt(limit)
     }
   };
+
+  // Cache the result
+  await CacheService.set(cacheKey, result);
+  console.log(`💾 Cached organizations list`);
+
+  return result;
 }
 
 /**
@@ -122,6 +140,16 @@ export async function getOrganizationById(userId, organizationId) {
   if (user.role !== 'super_admin' && user.organization_id !== parseInt(organizationId)) {
     throw new AppError('غير مصرح - يمكنك فقط عرض مؤسستك', 403);
   }
+
+  // Try cache first
+  const cacheKey = `organization:${organizationId}`;
+  const cached = await CacheService.get(cacheKey);
+  if (cached) {
+    console.log(`✅ Cache HIT for organization ${organizationId}`);
+    return cached;
+  }
+
+  console.log(`❌ Cache MISS for organization ${organizationId} - fetching from DB`);
 
   const organization = await Organization.findByPk(organizationId, {
     include: [
@@ -150,11 +178,17 @@ export async function getOrganizationById(userId, organizationId) {
   // Add stats
   const stats = await getOrganizationStats(userId, organizationId);
 
-  return {
+  const result = {
     ...organization.toJSON(),
     stats,
     subscription_active: organization.isSubscriptionActive()
   };
+
+  // Cache the result
+  await CacheService.set(cacheKey, result);
+  console.log(`💾 Cached organization ${organizationId}`);
+
+  return result;
 }
 
 /**
@@ -217,6 +251,10 @@ export async function createOrganization(userId, data) {
     description: `إنشاء منظمة جديدة: ${organization.name}`,
     newValues: organization.toJSON()
   });
+
+  // Invalidate all organizations list cache
+  await CacheService.invalidatePattern('organizations:all:*');
+  console.log(`🗑️ Cache cleared for all organizations lists after create`);
 
   return await getOrganizationById(userId, organization.id);
 }
@@ -284,6 +322,11 @@ export async function updateOrganization(userId, organizationId, data) {
     oldValues,
     newValues: organization.toJSON()
   });
+
+  // Invalidate cache for this organization and all lists
+  await CacheService.del(`organization:${organizationId}`);
+  await CacheService.invalidatePattern('organizations:all:*');
+  console.log(`🗑️ Cache cleared for organization ${organizationId} after update`);
 
   return await getOrganizationById(userId, organizationId);
 }
@@ -365,6 +408,12 @@ export async function deleteOrganization(userId, organizationId) {
       newValues: { is_active: false, employees_count: employeesCount, devices_count: devicesCount }
     });
 
+    // Invalidate cache
+    await CacheService.del(`organization:${organizationId}`);
+    await CacheService.invalidatePattern('organizations:all:*');
+    await CacheService.invalidateOrganization(organizationId, 'employees');
+    console.log(`🗑️ Cache cleared for organization ${organizationId} after deactivation`);
+
     return {
       type: 'deactivated',
       message: `تم تعطيل المنظمة لأنها تحتوي على ${employeesCount} موظف و ${devicesCount} جهاز. تم تعطيل جميع البيانات المرتبطة`,
@@ -395,6 +444,11 @@ export async function deleteOrganization(userId, organizationId) {
 
     // Delete the organization permanently
     await organization.destroy();
+
+    // Invalidate cache
+    await CacheService.del(`organization:${organizationId}`);
+    await CacheService.invalidatePattern('organizations:all:*');
+    console.log(`🗑️ Cache cleared for organization ${organizationId} after deletion`);
 
     return {
       type: 'deleted',
@@ -517,11 +571,12 @@ export async function activateOrganization(userId, organizationId) {
     throw new AppError('المؤسسة غير موجودة', 404);
   }
 
-  if (organization.is_active) {
-    throw new AppError('المؤسسة مفعلة بالفعل', 400);
-  }
-
+  // Update status regardless of current state
   await organization.update({ is_active: true });
+
+  // Invalidate cache
+  await CacheService.invalidatePattern('organizations:all:*');
+  await CacheService.del(`organization:${organizationId}`);
 
   return await getOrganizationById(userId, organizationId);
 }
@@ -542,11 +597,12 @@ export async function deactivateOrganization(userId, organizationId) {
     throw new AppError('المؤسسة غير موجودة', 404);
   }
 
-  if (!organization.is_active) {
-    throw new AppError('المؤسسة معطلة بالفعل', 400);
-  }
-
+  // Update status regardless of current state
   await organization.update({ is_active: false });
+
+  // Invalidate cache
+  await CacheService.invalidatePattern('organizations:all:*');
+  await CacheService.del(`organization:${organizationId}`);
 
   return await getOrganizationById(userId, organizationId);
 }

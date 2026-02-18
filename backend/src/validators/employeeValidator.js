@@ -5,12 +5,7 @@ import { validate } from '../middlewares/validate.js';
  * Validation for creating a new employee
  */
 export const createEmployeeValidator = [
-  body('employee_no')
-    .trim()
-    .notEmpty()
-    .withMessage('رقم الموظف مطلوب')
-    .isLength({ min: 1, max: 50 })
-    .withMessage('رقم الموظف يجب أن يكون بين 1 و 50 حرف'),
+  // employee_no is auto-generated, no validation needed
   
   body('name')
     .trim()
@@ -33,8 +28,8 @@ export const createEmployeeValidator = [
   
   body('phone')
     .optional({ checkFalsy: true })  // تجاهل القيم الفارغة
-    .matches(/^\+?[0-9]{10,20}$/)
-    .withMessage('رقم الهاتف يجب أن يتكون من 10-20 رقم'),
+    .matches(/^[\d\s\-\+\(\)]{7,20}$/)
+    .withMessage('رقم الهاتف يجب أن يكون صالحاً (7-20 رقم)'),
   
   body('department')
     .optional({ checkFalsy: true })
@@ -114,8 +109,8 @@ export const updateEmployeeValidator = [
   
   body('phone')
     .optional({ checkFalsy: true })
-    .matches(/^\+?[0-9]{10,20}$/)
-    .withMessage('رقم الهاتف يجب أن يتكون من 10-20 رقم'),
+    .matches(/^[\d\s\-\+\(\)]{7,20}$/)
+    .withMessage('رقم الهاتف يجب أن يكون صالحاً (7-20 رقم)'),
   
   body('department')
     .optional({ checkFalsy: true })

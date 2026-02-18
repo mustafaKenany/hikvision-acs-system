@@ -121,6 +121,26 @@ class CacheService {
   }
 
   /**
+   * Invalidate cache by pattern (alias for delPattern)
+   * @param {String} pattern - Pattern to match (e.g., "organizations:all:*")
+   * @returns {Promise<Number>} - Number of deleted keys
+   */
+  static async invalidatePattern(pattern) {
+    try {
+      const deleted = await this.delPattern(pattern);
+      
+      if (deleted > 0) {
+        console.log(`🗑️ Cache invalidated: ${deleted} keys matching "${pattern}"`);
+      }
+      
+      return deleted;
+    } catch (error) {
+      console.error(`❌ Cache invalidate pattern error for "${pattern}":`, error.message);
+      return 0;
+    }
+  }
+
+  /**
    * Check if key exists
    * @param {String} key - Cache key
    * @returns {Promise<Boolean>}

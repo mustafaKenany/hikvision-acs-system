@@ -6,12 +6,32 @@
         <h1 class="text-h4 font-weight-bold">
           <v-icon size="large" class="ml-2">mdi-login</v-icon>
           سجلات الدخول والحضور
-        </h-1>
+        </h1>
         <p class="text-subtitle-1 text-grey mt-2">
           سجل البصمات وأوقات الحضور والانصراف
         </p>
       </v-col>
       <v-col cols="auto">
+        <v-btn
+          color="success"
+          prepend-icon="mdi-microsoft-excel"
+          variant="outlined"
+          @click="exportToExcel"
+          :disabled="logs.length === 0"
+          class="ml-2"
+        >
+          تصدير Excel
+        </v-btn>
+        <v-btn
+          color="error"
+          prepend-icon="mdi-file-pdf-box"
+          variant="outlined"
+          @click="exportToPDF"
+          :disabled="logs.length === 0"
+          class="ml-2"
+        >
+          تصدير PDF
+        </v-btn>
         <v-menu>
           <template #activator="{ props }">
             <v-btn
@@ -195,8 +215,8 @@
           <div class="d-flex align-center py-2">
             <v-avatar size="40" class="ml-3" color="primary">
               <v-img
-                v-if="item.employee?.photo"
-                :src="`http://localhost:3000${item.employee.photo}`"
+                v-if="item.employee?.photo_url"
+                :src="`${API_BASE_URL}${item.employee.photo_url}`"
                 cover
               />
               <v-icon v-else color="white">mdi-account</v-icon>
@@ -395,6 +415,9 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import axios from '@/api/axios'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 
 const loading = ref(false)
 const logs = ref([])
@@ -405,6 +428,9 @@ const selectedLog = ref(null)
 const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
+
+// Get API base URL from environment
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 const filters = reactive({
   device_id: null,
@@ -459,14 +485,27 @@ const loadLogs = async () => {
     pagination.totalPages = response.data.data.pagination?.totalPages || 1
     pagination.total = response.data.data.pagination?.total || 0
 
-    // Update stats
+    // Update total in stats
     stats.total = pagination.total
-    // TODO: Calculate today, thisWeek, thisMonth from backend
   } catch (error) {
     console.error('Error loading logs:', error)
     showSnackbar('حدث خطأ أثناء تحميل السجلات', 'error')
   } finally {
     loading.value = false
+  }
+}
+
+const loadStats = async () => {
+  try {
+    const response = await axios.get('/access-logs/stats')
+    const data = response.data.data
+    
+    stats.today = data.todayCount || 0
+    stats.thisWeek = data.weekCount || 0
+    stats.thisMonth = data.monthCount || 0
+    stats.total = data.totalCount || 0
+  } catch (error) {
+    console.error('Error loading stats:', error)
   }
 }
 
@@ -505,7 +544,94 @@ const viewDetails = (log) => {
 
 const viewPhoto = (log) => {
   if (log.photo) {
-    window.open(`http://localhost:3000${log.photo}`, '_blank')
+    window.open(`${API_BASE_URL}${log.photo}`, '_blank')
+  }
+}
+
+const exportToExcel = () => {
+  try {
+    // Prepare data for Excel
+    const excelData = logs.value.map(log => ({
+      'رقم الموظف': log.employee_no || 'N/A',
+      'اسم الموظف': log.employee?.name || 'غير معروف',
+      'نوع السجل': getLogTypeLabel(log.log_type),
+      'التاريخ': formatDate(log.timestamp),
+      'الوقت': formatTime(log.timestamp),
+      'الجهاز': log.device?.name || 'N/A',
+      'الموقع': log.device?.location || 'N/A',
+      'طريقة التحقق': getVerificationLabel(log.verification_method),
+      'درجة الحرارة': log.temperature ? `${log.temperature}°C` : '-',
+      'كمامة': log.mask_detection !== undefined ? (log.mask_detection ? 'نعم' : 'لا') : '-'
+    }))
+
+    // Create workbook
+    const ws = XLSX.utils.json_to_sheet(excelData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'سجلات الدخول')
+
+    // Generate file name
+    const fileName = `access-logs-${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+
+    // Download
+    XLSX.writeFile(wb, fileName)
+    showSnackbar('تم تصدير البيانات إلى Excel بنجاح', 'success')
+  } catch (error) {
+    console.error('Error exporting to Excel:', error)
+    showSnackbar('حدث خطأ أثناء التصدير', 'error')
+  }
+}
+
+const exportToPDF = () => {
+  try {
+    const doc = new jsPDF('l', 'mm', 'a4') // Landscape orientation
+
+    // Add title
+    doc.setFontSize(16)
+    doc.text('Access Logs Report - تقرير سجلات الدخول', 148, 15, { align: 'center' })
+
+    // Add stats
+    doc.setFontSize(10)
+    doc.text(`Total: ${stats.total} | Today: ${stats.today} | This Week: ${stats.thisWeek} | This Month: ${stats.thisMonth}`, 148, 22, { align: 'center' })
+    doc.text(`Date: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`, 148, 28, { align: 'center' })
+
+    // Prepare table data
+    const tableData = logs.value.map(log => [
+      log.employee_no || 'N/A',
+      log.employee?.name || 'Unknown',
+      getLogTypeLabel(log.log_type),
+      formatDate(log.timestamp),
+      formatTime(log.timestamp),
+      log.device?.name || 'N/A',
+      getVerificationLabel(log.verification_method),
+      log.temperature ? `${log.temperature}°C` : '-'
+    ])
+
+    // Add table
+    doc.autoTable({
+      head: [['Employee No', 'Name', 'Type', 'Date', 'Time', 'Device', 'Verification', 'Temp']],
+      body: tableData,
+      startY: 35,
+      styles: { 
+        fontSize: 8,
+        cellPadding: 2
+      },
+      headStyles: {
+        fillColor: [33, 150, 243],
+        textColor: 255,
+        fontStyle: 'bold'
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      }
+    })
+
+    // Save PDF
+    const fileName = `access-logs-${format(new Date(), 'yyyy-MM-dd')}.pdf`
+    doc.save(fileName)
+    showSnackbar('تم تصدير البيانات إلى PDF بنجاح', 'success')
+  } catch (error) {
+    console.error('Error exporting to PDF:', error)
+    showSnackbar('حدث خطأ أثناء التصدير', 'error')
   }
 }
 
@@ -578,5 +704,6 @@ watch([search, filters], () => {
 onMounted(() => {
   loadLogs()
   loadDevices()
+  loadStats()
 })
 </script>

@@ -6,12 +6,10 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 // import { setupWebSocket } from './websocket/index.js'; // TODO: WebSocket not implemented yet
 import { setupRoutes } from './routes/index.js';
-import { errorHandler } from './middleware/errorHandler.js';
-import { requestLogger } from './middleware/logger.js';
-import { rateLimiter } from './middleware/rateLimiter.js';
-import { sequelize } from './database/connection.js';
+import { errorHandler } from './middlewares/errorHandler.js';
+import { requestLogger } from './middlewares/requestLogger.js';
+import { generalLimiter } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
-import { startCronJobs } from './cron/index.js';
 
 // Load environment variables
 dotenv.config();
@@ -26,10 +24,33 @@ const PORT = process.env.PORT || 3000;
 
 // Security middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
-}));
+
+// CORS Configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allowed origins
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:3000'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 
 // Compression
 app.use(compression());
@@ -42,7 +63,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
 // Rate limiting
-app.use(rateLimiter);
+app.use(generalLimiter);
 
 // Static files (uploads)
 app.use('/uploads', express.static('uploads'));
@@ -88,19 +109,8 @@ app.use((req, res) => {
 // ============================================
 const startServer = async () => {
   try {
-    // Test database connection
-    await sequelize.authenticate();
-    logger.info('✅ Database connection established successfully');
-
-    // Sync models (development only)
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: false });
-      logger.info('✅ Database models synchronized');
-    }
-
-    // Start cron jobs
-    startCronJobs();
-    logger.info('✅ Cron jobs started');
+    // TODO: Add database connection when ready
+    logger.info('✅ Server starting...');
 
     // Start HTTP server
     httpServer.listen(PORT, () => {
@@ -108,9 +118,9 @@ const startServer = async () => {
       ╔═══════════════════════════════════════════╗
       ║   🚀 HikVision ACS Backend Server        ║
       ║                                           ║
-      ║   Environment: ${process.env.NODE_ENV?.padEnd(29)}║
+      ║   Environment: ${(process.env.NODE_ENV || 'development').padEnd(29)}║
       ║   Port: ${PORT.toString().padEnd(35)}║
-      ║   API Version: ${process.env.API_VERSION?.padEnd(28)}║
+      ║   API Version: ${(process.env.API_VERSION || '1.0.0').padEnd(28)}║
       ║                                           ║
       ║   Server is ready! 🎉                    ║
       ╚═══════════════════════════════════════════╝
@@ -129,7 +139,6 @@ const startServer = async () => {
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully...');
   httpServer.close(async () => {
-    await sequelize.close();
     logger.info('✅ Server closed successfully');
     process.exit(0);
   });
@@ -138,7 +147,6 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully...');
   httpServer.close(async () => {
-    await sequelize.close();
     logger.info('✅ Server closed successfully');
     process.exit(0);
   });

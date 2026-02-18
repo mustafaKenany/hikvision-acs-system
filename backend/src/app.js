@@ -37,6 +37,7 @@ import attendanceLogRoutes from './routes/attendanceLogRoutes.js';
 import auditLogRoutes from './routes/auditLogRoutes.js';
 import printRoutes from './routes/printRoutes.js';
 import accessLogRoutes from './routes/accessLogRoutes.js';
+import biometricRoutes from './routes/biometricRoutes.js';
 // ... etc
 
 // Create Express app
@@ -156,6 +157,9 @@ app.use('/api/audit-logs', auditLogRoutes);
 
 // Print routes
 app.use('/api/print', printRoutes);
+
+// Biometric routes (Face & Card Registration)
+app.use('/api/biometrics', biometricRoutes);
 
 // Door routes
 // app.use('/api/doors', doorRoutes);

@@ -103,7 +103,7 @@ export async function getAllAccessLogs(filters = {}) {
         {
           model: Employee,
           as: 'employee',
-          attributes: ['id', 'full_name', 'employee_no', 'photo_url', 'email'],
+          attributes: ['id', 'name', 'employee_no', 'photo_url', 'email'],
           required: false
         }
       ],
@@ -155,7 +155,7 @@ export async function getAccessLogById(logId) {
         {
           model: Employee,
           as: 'employee',
-          attributes: ['id', 'full_name', 'employee_no', 'photo_url', 'email', 'phone'],
+          attributes: ['id', 'name', 'employee_no', 'photo_url', 'email', 'phone'],
           required: false
         }
       ]

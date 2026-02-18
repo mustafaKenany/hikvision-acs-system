@@ -25,6 +25,10 @@ class Employee extends Model {
         name: {
           type: DataTypes.STRING(255),
           allowNull: false,
+          unique: {
+            name: 'unique_employee_name',
+            msg: 'الاسم موجود مسبقاً، الرجاء إدخال اسم مختلف'
+          },
           validate: {
             notEmpty: true,
           },
@@ -37,6 +41,10 @@ class Employee extends Model {
         email: {
           type: DataTypes.STRING(255),
           allowNull: true,
+          unique: {
+            name: 'unique_employee_email',
+            msg: 'البريد الإلكتروني مستخدم مسبقاً'
+          },
           validate: {
             isEmail: true,
           },
@@ -44,6 +52,10 @@ class Employee extends Model {
         phone: {
           type: DataTypes.STRING(20),
           allowNull: true,
+          unique: {
+            name: 'unique_employee_phone',
+            msg: 'رقم الهاتف مستخدم مسبقاً'
+          },
         },
         department: {
           type: DataTypes.STRING(100),
@@ -100,7 +112,6 @@ class Employee extends Model {
           { fields: ['organization_id', 'employee_no'], unique: true },
           { fields: ['department'] },
           { fields: ['is_active'] },
-          { fields: ['name'] },
         ],
       }
     );

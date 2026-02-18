@@ -240,8 +240,8 @@ export const listDevicesValidator = [
   
   query('limit')
     .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage('حد العناصر يجب أن يكون بين 1 و 100'),
+    .isInt({ min: 1, max: 10000 })
+    .withMessage('حد العناصر يجب أن يكون بين 1 و 10000'),
   
   query('search')
     .optional()

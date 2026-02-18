@@ -72,35 +72,64 @@
                   <div v-if="form.biometrics_status.card_no">🔹 الكارت: {{ form.biometrics_status.card_no }}</div>
                 </div>
               </v-alert>
+
+              <!-- Biometric Registration Buttons -->
+              <div v-if="isEdit" class="mt-3">
+                <v-btn
+                  color="success"
+                  variant="outlined"
+                  size="small"
+                  prepend-icon="mdi-face-recognition"
+                  @click="openFaceRegistration"
+                  block
+                  class="mb-2"
+                >
+                  تسجيل بصمة الوجه
+                </v-btn>
+                <v-btn
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                  prepend-icon="mdi-card-account-details"
+                  @click="openCardRegistration"
+                  block
+                >
+                  تسجيل بطاقة RFID
+                </v-btn>
+              </div>
             </v-col>
 
             <!-- Employee Information Form -->
             <v-col cols="12" md="8">
               <v-row>
-                <!-- Employee Number -->
-                <v-col cols="12" sm="6">
+                <!-- Employee Number - Display only for editing -->
+                <v-col v-if="isEdit" cols="12" sm="6">
                   <v-text-field
                     id="employee_no"
                     v-model="form.employee_no"
                     name="employee_no"
-                    label="رقم الموظف *"
+                    label="رقم الموظف"
                     prepend-inner-icon="mdi-numeric"
                     variant="outlined"
-                    :rules="[rules.required]"
-                    required
+                    readonly
+                    bg-color="grey-lighten-4"
+                    hint="يتم إنشاء الرقم تلقائياً"
+                    persistent-hint
                   />
                 </v-col>
 
                 <!-- Full Name -->
-                <v-col cols="12" sm="6">
+                <v-col cols="12" :sm="isEdit ? 6 : 12">
                   <v-text-field
                     id="name"
                     v-model="form.name"
                     name="name"
-                    label="الاسم الكامل *"
+                    label="الاسم الكامل (ثلاثي) *"
                     prepend-inner-icon="mdi-account"
                     variant="outlined"
-                    :rules="[rules.required]"
+                    :rules="[rules.required, rules.fullName]"
+                    hint="يفضل إدخال الاسم الثلاثي (مثال: أحمد محمد علي) - يجب أن يكون الاسم مختلف عن الموظفين الآخرين"
+                    persistent-hint
                     required
                   />
                 </v-col>
@@ -158,6 +187,8 @@
                     variant="outlined"
                     type="email"
                     :rules="[rules.email]"
+                    hint="يجب أن يكون الإيميل مختلف عن جميع الموظفين"
+                    persistent-hint
                   />
                 </v-col>
 
@@ -170,6 +201,8 @@
                     label="رقم الهاتف"
                     prepend-inner-icon="mdi-phone"
                     variant="outlined"
+                    hint="يجب أن يكون رقم الهاتف مختلف عن جميع الموظفين"
+                    persistent-hint
                   />
                 </v-col>
 
@@ -241,38 +274,29 @@
       </v-card-actions>
     </v-card>
 
-    <!-- Success Dialog -->
-    <v-dialog v-model="successDialog" max-width="400" persistent>
-      <v-card>
-        <v-card-text class="text-center pa-8">
-          <v-icon size="80" color="success" class="mb-4">
-            mdi-check-circle
-          </v-icon>
-          <h2 class="text-h5 mb-3">✅ تم بنجاح!</h2>
-          <p class="text-body-1 mb-2">
-            {{ successMessage }}
-          </p>
-          <v-alert type="info" variant="tonal" class="mt-4 text-start">
-            <div class="text-caption">
-              <v-icon size="small" start>mdi-information</v-icon>
-              قد يستغرق ظهور التعديلات بضع ثوانٍ (حتى 5 ثوانٍ)
-            </div>
-          </v-alert>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="primary" variant="elevated" @click="closeSuccessDialog" block>
-            حسناً
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+
   </v-dialog>
+
+  <!-- Face Registration Dialog -->
+  <FaceRegistrationDialog
+    v-model="faceRegistrationDialog"
+    :employee="employee"
+    @registered="handleFaceRegistered"
+  />
+
+  <!-- Card Registration Dialog -->
+  <CardRegistrationDialog
+    v-model="cardRegistrationDialog"
+    :employee="employee"
+    @registered="handleCardRegistered"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import axios from '@/api/axios'
+import FaceRegistrationDialog from './FaceRegistrationDialog.vue'
+import CardRegistrationDialog from './CardRegistrationDialog.vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -294,8 +318,10 @@ const organizations = ref([])
 const photoInput = ref(null)
 const photoPreview = ref(null)
 const photoFile = ref(null)
-const successDialog = ref(false)
-const successMessage = ref('')
+
+// Biometric registration dialogs
+const faceRegistrationDialog = ref(false)
+const cardRegistrationDialog = ref(false)
 
 const isEdit = computed(() => !!props.employee?.id)
 
@@ -325,7 +351,13 @@ const form = ref({
 
 const rules = {
   required: v => !!v || 'هذا الحقل مطلوب',
-  email: v => !v || /.+@.+\..+/.test(v) || 'البريد الإلكتروني غير صحيح'
+  email: v => !v || /.+@.+\..+/.test(v) || 'البريد الإلكتروني غير صحيح',
+  fullName: v => {
+    if (!v) return 'هذا الحقل مطلوب'
+    const parts = v.trim().split(/\s+/)
+    if (parts.length < 2) return 'الرجاء إدخال الاسم الكامل (الاسم الأول والأخير على الأقل)'
+    return true
+  }
 }
 
 // Load organizations
@@ -374,8 +406,10 @@ const saveEmployee = async () => {
     // تنظيف البيانات - إزالة الحقول الفارغة
     const cleanedData = {}
     for (const key in form.value) {
-      // تجاهل photo_url لأنها تُرفع منفصلة
+      // تجاهل photo_url و biometrics_status (تُرفع منفصلة)
+      // تجاهل employee_no في حالة الإنشاء (سيتم توليده تلقائياً)
       if (key === 'photo_url' || key === 'biometrics_status') continue
+      if (key === 'employee_no' && !isEdit.value) continue
       
       const value = form.value[key]
       // إضافة الحقل فقط إذا كان له قيمة فعلية
@@ -384,7 +418,6 @@ const saveEmployee = async () => {
       }
     }
     // التأكد من الحقول المطلوبة
-    cleanedData.employee_no = form.value.employee_no
     cleanedData.name = form.value.name
     cleanedData.organization_id = form.value.organization_id
     if (form.value.is_active !== undefined && form.value.is_active !== null) {
@@ -396,7 +429,7 @@ const saveEmployee = async () => {
       // Update existing employee
       response = await axios.put(`/employees/${props.employee.id}`, cleanedData)
     } else {
-      // Create new employee
+      // Create new employee - لا نرسل employee_no لأنه سيتم توليده تلقائياً
       response = await axios.post('/employees', cleanedData)
     }
 
@@ -419,14 +452,13 @@ const saveEmployee = async () => {
       }
     }
 
-    // عرض رسالة نجاح
-    successMessage.value = isEdit.value 
+    // إصدار event للصفحة الرئيسية مع رسالة النجاح
+    const message = isEdit.value 
       ? `تم تحديث بيانات الموظف "${savedEmployee.name}" بنجاح!`
       : `تمت إضافة الموظف "${savedEmployee.name}" بنجاح!`
     
-    emit('saved', savedEmployee)
+    emit('saved', { employee: savedEmployee, message })
     closeDialog()
-    successDialog.value = true
   } catch (error) {
     console.error('Error saving employee:', error)
     console.error('Response data:', error.response?.data)
@@ -470,6 +502,34 @@ const closeDialog = () => {
 // Close success dialog
 const closeSuccessDialog = () => {
   successDialog.value = false
+}
+
+// Open Face Registration Dialog
+const openFaceRegistration = () => {
+  faceRegistrationDialog.value = true
+}
+
+// Open Card Registration Dialog
+const openCardRegistration = () => {
+  cardRegistrationDialog.value = true
+}
+
+// Handle Face Registration Success
+const handleFaceRegistered = (data) => {
+  console.log('Face registered:', data)
+  // Refresh biometrics status
+  if (form.value.biometrics_status) {
+    form.value.biometrics_status.face = true
+  }
+}
+
+// Handle Card Registration Success
+const handleCardRegistered = (data) => {
+  console.log('Card registered:', data)
+  // Refresh biometrics status
+  if (form.value.biometrics_status) {
+    form.value.biometrics_status.card_no = data.card.card_number
+  }
 }
 
 // Watch for employee changes
