@@ -960,7 +960,463 @@ src/
 
 ---
 
-## 📞 للتواصل والاستفسارات
+## � نظام تقارير الحضور والانصراف
+**تاريخ الإضافة:** 19 فبراير 2026  
+**الأولوية:** 🔴 عالية جداً  
+**الوقت المتوقع:** 2-3 أيام (15-20 ساعة عمل)
+
+### 📌 الوضع الحالي
+
+#### ✅ موجود ويعمل:
+- جدول `AttendanceLog` - يخزن أحداث الدخول/الخروج
+- جدول `AttendanceSummary` - ملخص يومي للحضور
+- جدول `WorkSchedule` - جداول العمل مع GPS وفترات السماح
+- جدول `EmployeeSchedule` - ربط الموظفين بجداول العمل
+- APIs الحضور موجودة لكن **غير مفعلة** في الـ routes
+
+#### ❌ مفقود - يحتاج تطوير:
+- ربط `attendanceLogRoutes.js` بالسيرفر الرئيسي
+- خدمة حساب التأخير تلقائياً (Auto-calculate late)
+- خدمة حساب ساعات العمل (Working hours calculation)
+- APIs التقارير الشهرية والتأخيرات
+- صفحة Frontend لعرض التقارير
+
+---
+
+### 🎯 الميزات المطلوبة
+
+#### 1. **تفعيل Attendance Routes** ⚡
+**الوقت:** 30 دقيقة
+
+```javascript
+// backend/src/routes/index.js
+import attendanceLogRoutes from './attendanceLogRoutes.js';
+
+export const setupRoutes = (app) => {
+  // ... existing routes
+  app.use(`${API_PREFIX}/attendance-logs`, attendanceLogRoutes); // ← إضافة
+};
+```
+
+**الـ APIs الجاهزة:**
+- `GET /api/attendance-logs` - جلب سجلات الحضور
+- `GET /api/attendance-logs/stats` - إحصائيات الحضور
+
+---
+
+#### 2. **خدمة حساب التأخير والساعات** 🧮
+**الوقت:** 4-5 ساعات
+
+**الملف:** `backend/src/services/attendanceCalculationService.js`
+
+```javascript
+/**
+ * حساب التأخير وساعات العمل تلقائياً
+ */
+export const calculateAttendanceData = async (employeeId, date) => {
+  // 1. جلب جدول عمل الموظف (WorkSchedule + EmployeeSchedule)
+  // 2. جلب سجلات الدخول/الخروج (AttendanceLog)
+  // 3. حساب:
+  //    - is_late: هل متأخر؟
+  //    - late_minutes: كم دقيقة تأخير؟ (مع late_grace_minutes)
+  //    - working_hours: ساعات العمل الفعلية
+  //    - overtime_hours: ساعات إضافية
+  //    - status: present | late | half_day | absent
+  // 4. حفظ في AttendanceSummary
+};
+```
+
+**الحقول المطلوب حسابها:**
+- `check_in_time` - وقت الدخول الفعلي
+- `check_out_time` - وقت الخروج الفعلي
+- `is_late` - Boolean (true إذا متأخر)
+- `late_minutes` - عدد دقائق التأخير (بعد فترة السماح)
+- `working_hours` - الساعات الفعلية (check_out - check_in - breaks)
+- `overtime_hours` - الساعات الإضافية (فوق expected_hours)
+- `status` - present, late, half_day, absent, holiday, leave
+
+**Integration مع WorkSchedule:**
+```javascript
+// WorkSchedule يحتوي على:
+- start_time: "09:00:00" (وقت بداية الدوام)
+- end_time: "17:00:00" (وقت نهاية الدوام)
+- late_grace_minutes: 15 (فترة سماح قبل احتساب التأخير)
+- early_leave_grace_minutes: 15
+- expected_hours: 8.0 (ساعات العمل المتوقعة)
+- break_minutes: 60 (وقت الاستراحة)
+- work_days: [1,2,3,4,5] (الأحد-الخميس)
+```
+
+**مثال على الحساب:**
+```javascript
+// جدول العمل: 9:00 صباحاً - 5:00 مساءً (فترة سماح 15 دقيقة)
+// الموظف دخل: 9:20 صباحاً
+// النتيجة:
+- is_late: true
+- late_minutes: 5  // (9:20 - 9:00 = 20, minus 15 grace = 5)
+- status: "late"
+
+// الموظف خرج: 5:10 مساءً
+// ساعات العمل: 7.83 hours (9:20 AM to 5:10 PM)
+- working_hours: 7.83
+- overtime_hours: 0 (أقل من 8 ساعات)
+```
+
+---
+
+#### 3. **APIs التقارير** 📈
+**الوقت:** 3-4 ساعات
+
+**الملف:** `backend/src/routes/attendanceReportRoutes.js`
+
+```javascript
+// GET /api/reports/attendance/daily
+// GET /api/reports/attendance/monthly
+// GET /api/reports/attendance/employee/:id
+// GET /api/reports/late-arrivals
+// GET /api/reports/overtime
+// GET /api/reports/absences
+```
+
+**التقرير الشهري:**
+```javascript
+{
+  "employee_id": 123,
+  "employee_name": "أحمد محمد",
+  "month": "2026-02",
+  "total_days": 28,
+  "working_days": 20,
+  "present_days": 18,
+  "late_days": 5,
+  "absent_days": 2,
+  "total_working_hours": 144.5,
+  "total_late_minutes": 75,
+  "average_late_minutes": 15,
+  "overtime_hours": 4.5,
+  "days": [
+    {
+      "date": "2026-02-01",
+      "status": "present",
+      "check_in": "09:00:00",
+      "check_out": "17:00:00",
+      "is_late": false,
+      "working_hours": 8.0
+    },
+    {
+      "date": "2026-02-02",
+      "status": "late",
+      "check_in": "09:25:00",
+      "check_out": "17:05:00",
+      "is_late": true,
+      "late_minutes": 10,
+      "working_hours": 7.67
+    }
+    // ... باقي الأيام
+  ]
+}
+```
+
+**تقرير التأخيرات:**
+```javascript
+{
+  "start_date": "2026-02-01",
+  "end_date": "2026-02-19",
+  "late_employees": [
+    {
+      "employee_id": 123,
+      "employee_name": "أحمد محمد",
+      "department": "تكنولوجيا المعلومات",
+      "total_late_days": 5,
+      "total_late_minutes": 75,
+      "average_late_minutes": 15,
+      "late_records": [
+        {
+          "date": "2026-02-02",
+          "check_in": "09:25:00",
+          "expected_time": "09:00:00",
+          "late_minutes": 10
+        }
+        // ... باقي التأخيرات
+      ]
+    }
+    // ... باقي الموظفين
+  ],
+  "summary": {
+    "total_employees": 150,
+    "late_employees_count": 45,
+    "late_percentage": 30.0
+  }
+}
+```
+
+---
+
+#### 4. **Frontend - صفحة التقارير** 🖥️
+**الوقت:** 6-8 ساعات
+
+**الملف:** `frontend/src/views/AttendanceReports.vue`
+
+**المكونات المطلوبة:**
+
+##### A. **فلاتر التقارير:**
+```vue
+<v-card class="mb-4">
+  <v-card-title>فلاتر التقارير</v-card-title>
+  <v-card-text>
+    <!-- نوع التقرير -->
+    <v-select
+      v-model="reportType"
+      :items="reportTypes"
+      label="نوع التقرير"
+      outlined
+    />
+    
+    <!-- اختيار الفترة -->
+    <v-menu>
+      <template v-slot:activator="{ props }">
+        <v-text-field
+          v-bind="props"
+          label="من تاريخ"
+          readonly
+        />
+      </template>
+      <v-date-picker />
+    </v-menu>
+    
+    <!-- اختيار الموظف (اختياري) -->
+    <v-autocomplete
+      v-model="selectedEmployee"
+      :items="employees"
+      label="الموظف (اختياري)"
+      clearable
+    />
+    
+    <!-- زر البحث -->
+    <v-btn color="primary" @click="generateReport">
+      إنشاء التقرير
+    </v-btn>
+  </v-card-text>
+</v-card>
+```
+
+##### B. **جدول التقرير:**
+```vue
+<v-data-table
+  :headers="headers"
+  :items="reportData"
+  :loading="loading"
+  class="elevation-1"
+>
+  <!-- عمود الحالة مع ألوان -->
+  <template v-slot:item.status="{ item }">
+    <v-chip
+      :color="getStatusColor(item.status)"
+      dark
+      small
+    >
+      {{ getStatusText(item.status) }}
+    </v-chip>
+  </template>
+  
+  <!-- عمود التأخير -->
+  <template v-slot:item.late_minutes="{ item }">
+    <span v-if="item.is_late" class="text-error">
+      {{ item.late_minutes }} دقيقة
+    </span>
+    <span v-else class="text-success">—</span>
+  </template>
+</v-data-table>
+```
+
+##### C. **إحصائيات التقرير:**
+```vue
+<v-row class="mb-4">
+  <v-col cols="12" md="3">
+    <v-card>
+      <v-card-text class="text-center">
+        <div class="text-h4">{{ stats.present_days }}</div>
+        <div class="text-subtitle-2">أيام الحضور</div>
+      </v-card-text>
+    </v-card>
+  </v-col>
+  
+  <v-col cols="12" md="3">
+    <v-card color="error">
+      <v-card-text class="text-center white--text">
+        <div class="text-h4">{{ stats.late_days }}</div>
+        <div class="text-subtitle-2">أيام التأخير</div>
+      </v-card-text>
+    </v-card>
+  </v-col>
+  
+  <v-col cols="12" md="3">
+    <v-card color="warning">
+      <v-card-text class="text-center white--text">
+        <div class="text-h4">{{ stats.absent_days }}</div>
+        <div class="text-subtitle-2">أيام الغياب</div>
+      </v-card-text>
+    </v-card>
+  </v-col>
+  
+  <v-col cols="12" md="3">
+    <v-card color="success">
+      <v-card-text class="text-center white--text">
+        <div class="text-h4">{{ stats.total_working_hours }}</div>
+        <div class="text-subtitle-2">ساعات العمل</div>
+      </v-card-text>
+    </v-card>
+  </v-col>
+</v-row>
+```
+
+##### D. **Export إلى Excel/PDF:**
+```vue
+<v-card-actions>
+  <v-spacer />
+  <v-btn color="success" @click="exportToExcel">
+    <v-icon left>mdi-file-excel</v-icon>
+    تصدير Excel
+  </v-btn>
+  <v-btn color="error" @click="exportToPDF">
+    <v-icon left>mdi-file-pdf</v-icon>
+    تصدير PDF
+  </v-btn>
+</v-card-actions>
+```
+
+---
+
+#### 5. **Background Job لحساب الحضور التلقائي** ⚙️
+**الوقت:** 2-3 ساعات (اختياري - للتحسين)
+
+```javascript
+// backend/src/jobs/calculateDailyAttendance.js
+// يعمل كل يوم في منتصف الليل (00:30 AM)
+// يحسب حضور اليوم السابق لجميع الموظفين
+
+import cron from 'node-cron';
+
+cron.schedule('30 0 * * *', async () => {
+  console.log('بدء حساب الحضور اليومي...');
+  
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  // جلب جميع الموظفين النشطين
+  const employees = await Employee.findAll({ where: { is_active: true } });
+  
+  // حساب لكل موظف
+  for (const employee of employees) {
+    await calculateAttendanceData(employee.id, yesterday);
+  }
+  
+  console.log('انتهى حساب الحضور اليومي');
+});
+```
+
+---
+
+### 📋 خطة التنفيذ المقترحة
+
+#### المرحلة 1: البنية التحتية (3-4 ساعات)
+- [x] تفعيل attendance routes في server.js
+- [ ] إنشاء `attendanceCalculationService.js`
+- [ ] إنشاء `attendanceReportRoutes.js`
+- [ ] Testing للحسابات الأساسية
+
+#### المرحلة 2: APIs التقارير (3-4 ساعات)
+- [ ] API التقرير اليومي
+- [ ] API التقرير الشهري
+- [ ] API تقرير التأخيرات
+- [ ] API تقرير ساعات الإضافي
+- [ ] Testing مع بيانات حقيقية
+
+#### المرحلة 3: Frontend (6-8 ساعات)
+- [ ] إنشاء `AttendanceReports.vue`
+- [ ] فلاتر التقارير (Date range, Employee, Type)
+- [ ] جدول البيانات بالألوان
+- [ ] بطاقات الإحصائيات
+- [ ] Export إلى Excel/PDF
+- [ ] Testing UI/UX
+
+#### المرحلة 4: التحسينات (اختياري - 2-3 ساعات)
+- [ ] Background job للحساب التلقائي
+- [ ] Caching للتقارير المتكررة
+- [ ] Real-time updates (WebSocket)
+- [ ] إشعارات التأخير
+
+---
+
+### 🎯 الفوائد المتوقعة
+
+1. **حساب تلقائي دقيق:**
+   - حساب التأخير بناءً على جداول العمل الفعلية
+   - احترام فترات السماح (grace periods)
+   - حساب ساعات العمل والإضافي بدقة
+
+2. **تقارير شاملة:**
+   - تقارير يومية/شهرية/سنوية
+   - تقارير التأخيرات مع التفاصيل
+   - إحصائيات الغياب والحضور
+
+3. **واجهة سهلة:**
+   - فلاتر مرنة لأي فترة زمنية
+   - عرض واضح بالألوان
+   - Export سريع للتقارير
+
+4. **توفير الوقت:**
+   - حساب تلقائي بدون تدخل يدوي
+   - Background jobs للمعالجة الليلية
+   - تقارير جاهزة في ثوانٍ
+
+---
+
+### 📦 المكتبات المطلوبة
+
+#### Backend:
+```json
+{
+  "node-cron": "^3.0.0",  // للـ scheduled jobs
+  "date-fns": "^3.0.0"    // لحسابات التاريخ
+}
+```
+
+#### Frontend:
+```json
+{
+  "xlsx": "^0.18.0",           // Excel export (موجودة)
+  "jspdf": "^2.5.0",           // PDF export (موجودة)
+  "jspdf-autotable": "^3.8.0", // PDF tables (موجودة)
+  "date-fns": "^3.0.0"         // Date utilities (موجودة)
+}
+```
+
+---
+
+### ✅ Checklist للتطبيق
+
+Backend:
+- [ ] ربط attendanceLogRoutes في index.js
+- [ ] إنشاء attendanceCalculationService.js
+- [ ] إنشاء attendanceReportRoutes.js
+- [ ] Testing للحسابات
+- [ ] Background job (اختياري)
+
+Frontend:
+- [ ] إنشاء AttendanceReports.vue
+- [ ] إضافة route للتقارير
+- [ ] Sidebar menu item
+- [ ] Testing UI
+- [ ] Export functionality
+
+Documentation:
+- [ ] تحديث ROADMAP.md ✅
+- [ ] API Documentation للـ report endpoints
+- [ ] User Guide للتقارير
+
+---
+
+## �📞 للتواصل والاستفسارات
 - يمكن تعديل هذا الملف حسب الحاجة
 - إضافة ميزات جديدة
 - تغيير الأولويات
@@ -1422,9 +1878,44 @@ app.use('/api/', rateLimit({
   - إدارة الصور المتقدمة
   - إشعارات وتنبيهات
 
+### 19 فبراير 2026
+- ✅ **إضافة قسم "نظام تقارير الحضور والانصراف"**
+  - تفعيل Attendance Routes API
+  - خدمة حساب التأخير والساعات تلقائياً
+  - نظام التقارير اليومية والشهرية
+  - تقارير التأخير مع فترات السماح
+  - Frontend UI لعرض التقارير
+  - Integration مع جداول العمل (WorkSchedule)
+  - حساب ساعات الإضافي (Overtime)
+  - Excel/PDF Export للتقارير
+
+### 11 فبراير 2026
+- ✅ **إضافة قسم "Advanced Performance & Scalability"**
+  - Redis Caching Layer
+  - Advanced Database Indexes
+  - Background Job Queue (Bull/BullMQ)
+  - Query Optimization
+  - Connection Pooling
+  - Rate Limiting & Security
+  - Monitoring & Analytics
+  - Docker & Cloud Deployment
+  - خطة تنفيذ تفصيلية (27 يوم)
+  - جدول مقارنة الأداء (قبل/بعد)
+
+### 9 فبراير 2026
+- ✅ **إضافة قسم "ميزات متقدمة"** - 8 ميزات للموظفين
+  - استيراد جماعي (Bulk Import)
+  - عمليات جماعية (Bulk Actions)
+  - تقارير متقدمة (Advanced Reports)
+  - صلاحيات الوصول (Access Permissions)
+  - جداول العمل (Work Schedules)
+  - QR Code للموظف
+  - إدارة الصور المتقدمة
+  - إشعارات وتنبيهات
+
 ### 8 فبراير 2026
 - ✅ إنشاء الملف الأولي
 - ✅ تحديد التقنيات المستخدمة
 - ✅ وضع خطة التنفيذ الأولية
 
-**آخر تحديث:** 11 فبراير 2026
+**آخر تحديث:** 19 فبراير 2026
