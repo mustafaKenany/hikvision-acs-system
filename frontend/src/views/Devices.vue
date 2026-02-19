@@ -405,27 +405,67 @@
     </v-dialog>
 
     <!-- Delete Confirmation -->
-    <v-dialog v-model="deleteDialog" max-width="500">
+    <v-dialog v-model="deleteDialog" max-width="600">
       <v-card>
-        <v-card-title class="bg-error text-white">
-          <v-icon class="ml-2">mdi-alert</v-icon>
-          تأكيد الحذف
+        <v-card-title class="bg-error text-white d-flex align-center">
+          <v-icon size="large" class="ml-2">mdi-delete-alert</v-icon>
+          <span class="text-h5">⚠️ تأكيد حذف الجهاز</span>
         </v-card-title>
         <v-card-text class="pa-6">
-          <p class="text-h6 mb-2">هل أنت متأكد من حذف هذا الجهاز؟</p>
-          <p class="text-subtitle-1 text-grey">
-            الجهاز: <strong>{{ deviceToDelete?.name }}</strong>
+          <div class="text-center mb-4">
+            <v-icon size="80" color="error">mdi-shield-alert</v-icon>
+          </div>
+          <p class="text-h6 mb-4 text-center font-weight-bold">
+            هل أنت متأكد تماماً من حذف الجهاز؟
           </p>
-          <v-alert color="warning" variant="tonal" class="mt-4">
+          <v-card class="mb-4 bg-grey-lighten-4" variant="outlined">
+            <v-card-text>
+              <div class="d-flex align-center mb-2">
+                <v-icon class="ml-2" color="primary">mdi-devices</v-icon>
+                <strong>اسم الجهاز:</strong>
+                <span class="mr-2">{{ deviceToDelete?.name }}</span>
+              </div>
+              <div class="d-flex align-center mb-2">
+                <v-icon class="ml-2" color="info">mdi-ip-network</v-icon>
+                <strong>عنوان IP:</strong>
+                <span class="mr-2">{{ deviceToDelete?.ip_address }}</span>
+              </div>
+              <div class="d-flex align-center">
+                <v-icon class="ml-2" color="warning">mdi-map-marker</v-icon>
+                <strong>الموقع:</strong>
+                <span class="mr-2">{{ deviceToDelete?.location || '-' }}</span>
+              </div>
+            </v-card-text>
+          </v-card>
+          <v-alert type="warning" variant="tonal" class="mb-3">
+            <v-icon>mdi-alert</v-icon>
+            <strong>تنبيه:</strong> هذا الإجراء لا يمكن التراجع عنه!
+          </v-alert>
+          <v-alert color="warning" variant="tonal">
             <v-icon>mdi-information</v-icon>
             لن يتم حذف السجلات المرتبطة بالجهاز
           </v-alert>
         </v-card-text>
         <v-card-actions class="pa-4">
           <v-spacer />
-          <v-btn variant="text" @click="deleteDialog = false">إلغاء</v-btn>
-          <v-btn color="error" @click="deleteDevice" :loading="deleteLoading">
-            تأكيد الحذف
+          <v-btn 
+            variant="outlined" 
+            size="large"
+            @click="deleteDialog = false"
+            :disabled="deleteLoading"
+          >
+            <v-icon class="ml-2">mdi-close</v-icon>
+            إلغاء
+          </v-btn>
+          <v-btn 
+            color="error" 
+            size="large"
+            variant="elevated"
+            @click="deleteDevice" 
+            :loading="deleteLoading"
+          >
+            <v-icon class="ml-2">mdi-delete-forever</v-icon>
+            نعم، احذف الجهاز
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -525,11 +565,14 @@ const loadDevices = async () => {
       page: pagination.currentPage,
       limit: pagination.limit,
       search: search.value,
+      _t: Date.now(), // Prevent caching
       ...filters
     }
 
     const response = await axios.get('/devices', { params })
-    devices.value = response.data.data.devices
+    
+    // Force reactive update by replacing entire array
+    devices.value = [...response.data.data.devices]
     pagination.totalPages = response.data.data.pagination.totalPages
     pagination.total = response.data.data.pagination.total
 
@@ -677,15 +720,35 @@ const confirmDelete = (device) => {
 }
 
 const deleteDevice = async () => {
+  if (!deviceToDelete.value) return
+  
   deleteLoading.value = true
+  const deviceId = deviceToDelete.value.id
+  
   try {
-    await axios.delete(`/devices/${deviceToDelete.value.id}`)
-    showSnackbar('تم حذف الجهاز بنجاح', 'success')
+    await axios.delete(`/devices/${deviceId}`)
+    
+    // Remove from array immediately (optimistic update)
+    devices.value = devices.value.filter(d => d.id !== deviceId)
+    
+    // Update stats
+    stats.total = devices.value.length
+    stats.online = devices.value.filter(d => d.is_online).length
+    stats.offline = devices.value.filter(d => !d.is_online).length
+    stats.active = devices.value.filter(d => d.is_active).length
+    
+    // Close dialog and show success
     deleteDialog.value = false
-    loadDevices()
+    deviceToDelete.value = null
+    showSnackbar('تم حذف الجهاز بنجاح', 'success')
+    
+    // Reload to ensure sync with backend
+    await loadDevices()
   } catch (error) {
     console.error('Error deleting device:', error)
     showSnackbar('حدث خطأ أثناء الحذف', 'error')
+    // Reload on error to restore correct state
+    await loadDevices()
   } finally {
     deleteLoading.value = false
   }

@@ -3,10 +3,8 @@
  * خدمة إدارة البيانات البيومترية (Face & Card)
  */
 
-import { Employee, Device, User, FaceTemplate, CardTemplate } from '../models/index.js';
+import { Employee, Device, User, FaceTemplate, CardTemplate, sequelize } from '../models/index.js';
 import { AppError } from '../middlewares/errorHandler.js';
-import MockDeviceService from './mockDeviceService.js';
-import sequelize from '../config/database.js';
 
 /**
  * Check if we should use Mock or Real Device Service
@@ -53,27 +51,31 @@ export async function registerFace(userId, employeeId, deviceId, imageBuffer) {
       throw new AppError('الجهاز غير موجود أو غير مفعّل', 404);
     }
 
-    // 4. Register face (Mock or Real)
-    let result;
-    if (shouldUseMock()) {
-      console.log('🎭 Using Mock Device Service for Face Registration');
-      result = await MockDeviceService.registerFace(
-        device.id,
-        employee.id,
-        imageBuffer
-      );
+    // 4. Upload face to device via ISAPI
+    const { HikvisionClient } = await import('../utils/hikvisionClient.js');
+    const hikvisionClient = new HikvisionClient(device);
+    const uploadResult = await hikvisionClient.uploadFace({
+      employeeNo: employee.employee_no,
+      name: employee.name,
+      imageBase64: imageBuffer.toString('base64')
+    });
+
+    if (!uploadResult.success) {
+      console.warn('[BiometricService] Face upload to device warning:', uploadResult.error);
+      // Still save to DB - device might be temporarily unreachable
     } else {
-      // TODO: Real SDK Integration
-      throw new AppError('Real SDK Integration not implemented yet', 501);
+      console.log(`[BiometricService] Face uploaded to device via ${uploadResult.method}`);
     }
 
-    // 5. Save face template to database
-    const faceTemplate = await FaceTemplate.create({
+    // 5. Save face template to database (upsert to handle duplicate employee+device)
+    const [faceTemplate] = await FaceTemplate.upsert({
       employee_id: employee.id,
       device_id: device.id,
-      face_data: imageBuffer.toString('base64'),
-      sync_status: 'synced',
-      synced_at: new Date()
+      face_id: uploadResult.faceId || employee.employee_no,
+      sync_status: uploadResult.success ? 'synced' : 'failed',
+      sync_error: uploadResult.success ? null : (uploadResult.error || null),
+      last_synced_at: uploadResult.success ? new Date() : null,
+      is_active: true
     }, { transaction });
 
     // 6. Update employee metadata
@@ -149,14 +151,12 @@ export async function deleteFace(userId, employeeId, deviceId) {
       throw new AppError('الجهاز غير موجود', 404);
     }
 
-    // 4. Delete from device (Mock or Real)
-    if (shouldUseMock()) {
-      console.log('🎭 Using Mock Device Service for Face Deletion');
-      await MockDeviceService.deleteFace(device.id, employee.id);
-    } else {
-      // TODO: Real SDK Integration
-      throw new AppError('Real SDK Integration not implemented yet', 501);
-    }
+    // 4. Delete from device via ISAPI
+    const { HikvisionClient } = await import('../utils/hikvisionClient.js');
+    const hikvisionClient = new HikvisionClient(device);
+    await hikvisionClient.deleteFace(employee.employee_no).catch(err => {
+      console.warn('[BiometricService] Face deletion from device warning:', err.message);
+    });
 
     // 5. Delete from database
     await FaceTemplate.destroy({

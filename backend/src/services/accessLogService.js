@@ -368,9 +368,6 @@ export async function deleteAccessLog(userId, logId) {
  */
 export async function pullLogsFromAllDevices(userId, filters = {}) {
   try {
-    // Import deviceService to avoid circular dependency
-    const deviceService = await import('./deviceService.js');
-
     // Validate user
     const user = await User.findByPk(userId);
     if (!user) {
@@ -381,7 +378,7 @@ export async function pullLogsFromAllDevices(userId, filters = {}) {
     const devices = await Device.findAll({
       where: {
         is_active: true,
-        is_deleted: false
+        deleted_at: null
       }
     });
 
@@ -389,23 +386,22 @@ export async function pullLogsFromAllDevices(userId, filters = {}) {
       throw new Error('لا توجد أجهزة نشطة');
     }
 
+    const { pullDeviceLogs } = await import('./deviceService.js');
+
     const results = [];
     let totalNewLogs = 0;
-    let totalExistingLogs = 0;
 
     // Pull logs from each device
     for (const device of devices) {
       try {
-        const result = await deviceService.default.pullDeviceLogs(userId, device.id, filters);
+        const result = await pullDeviceLogs(userId, device.id, filters);
         results.push({
           deviceId: device.id,
           deviceName: device.name,
           success: true,
-          newLogs: result.newLogs,
-          existingLogs: result.existingLogs
+          newLogs: result.count
         });
-        totalNewLogs += result.newLogs;
-        totalExistingLogs += result.existingLogs;
+        totalNewLogs += result.count;
       } catch (error) {
         results.push({
           deviceId: device.id,
@@ -419,14 +415,12 @@ export async function pullLogsFromAllDevices(userId, filters = {}) {
     // Audit log
     await AuditLog.logAction(userId, 'access_logs_pull_all', 'AccessLog', null, {
       devicesCount: devices.length,
-      totalNewLogs,
-      totalExistingLogs
+      totalNewLogs
     });
 
     return {
       totalDevices: devices.length,
       totalNewLogs,
-      totalExistingLogs,
       results
     };
   } catch (error) {

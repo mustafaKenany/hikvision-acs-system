@@ -52,6 +52,16 @@ const router = createRouter({
           meta: { requiresSuperAdmin: true }
         },
         {
+          path: '/work-schedules',
+          name: 'work-schedules',
+          component: () => import('@/views/WorkSchedules.vue')
+        },
+        {
+          path: '/attendance-reports',
+          name: 'attendance-reports',
+          component: () => import('@/views/AttendanceReports.vue')
+        },
+        {
           path: '/settings',
           name: 'settings',
           component: () => import('@/views/Settings.vue')

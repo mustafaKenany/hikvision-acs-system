@@ -44,6 +44,17 @@ router.get(
 );
 
 /**
+ * @route   POST /api/devices/discover
+ * @desc    Discover Hikvision devices on network
+ * @access  Private - Admin, Manager  
+ */
+router.post(
+  '/discover',
+  authorize(['super_admin', 'admin', 'manager']),
+  deviceController.discoverDevices
+);
+
+/**
  * @route   GET /api/devices/:id
  * @desc    Get single device by ID
  * @access  Private - All authenticated users
@@ -160,17 +171,6 @@ router.post(
   authorize(['super_admin', 'admin', 'manager']),
   deviceIdValidator,
   deviceController.activateLiveCapture
-);
-
-/**
- * @route   POST /api/devices/discover
- * @desc    Discover Hikvision devices on network
- * @access  Private - Admin, Manager
- */
-router.post(
-  '/discover',
-  authorize(['super_admin', 'admin', 'manager']),
-  deviceController.discoverDevices
 );
 
 /**

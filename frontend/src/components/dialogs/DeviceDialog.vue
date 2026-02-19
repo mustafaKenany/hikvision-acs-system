@@ -17,11 +17,14 @@
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="formData.name"
+                id="device-name"
+                name="device-name"
                 label="اسم الجهاز *"
                 :rules="[rules.required]"
                 variant="outlined"
                 prepend-inner-icon="mdi-devices"
                 placeholder="مثال: جهاز المدخل الرئيسي"
+                autocomplete="off"
               />
             </v-col>
 
@@ -29,11 +32,14 @@
             <v-col cols="12" md="6">
               <v-select
                 v-model="formData.device_type"
+                id="device-type"
+                name="device-type"
                 label="نوع الجهاز *"
                 :items="deviceTypes"
                 :rules="[rules.required]"
                 variant="outlined"
                 prepend-inner-icon="mdi-shape"
+                autocomplete="off"
               />
             </v-col>
 
@@ -41,11 +47,14 @@
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="formData.ip_address"
+                id="device-ip"
+                name="device-ip"
                 label="عنوان IP *"
                 :rules="[rules.required, rules.ip]"
                 variant="outlined"
                 prepend-inner-icon="mdi-ip-network"
                 placeholder="192.168.1.100"
+                autocomplete="off"
               />
             </v-col>
 
@@ -53,12 +62,15 @@
             <v-col cols="12" md="6">
               <v-text-field
                 v-model.number="formData.port"
+                id="device-port"
+                name="device-port"
                 label="المنفذ (Port) *"
                 :rules="[rules.required, rules.port]"
                 type="number"
                 variant="outlined"
                 prepend-inner-icon="mdi-lan"
                 placeholder="80"
+                autocomplete="off"
               />
             </v-col>
 
@@ -66,11 +78,14 @@
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="formData.username"
+                id="device-username"
+                name="device-username"
                 label="اسم المستخدم *"
                 :rules="[rules.required]"
                 variant="outlined"
                 prepend-inner-icon="mdi-account"
                 placeholder="admin"
+                autocomplete="username"
               />
             </v-col>
 
@@ -78,6 +93,8 @@
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="formData.password"
+                id="device-password"
+                name="device-password"
                 label="كلمة المرور *"
                 :rules="isEdit ? [] : [rules.required]"
                 :type="showPassword ? 'text' : 'password'"
@@ -86,6 +103,7 @@
                 :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
                 @click:append-inner="showPassword = !showPassword"
                 :placeholder="isEdit ? 'اتركها فارغة لعدم التغيير' : ''"
+                autocomplete="current-password"
               />
             </v-col>
 
@@ -93,9 +111,12 @@
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="formData.serial_number"
+                id="device-serial"
+                name="device-serial"
                 label="الرقم التسلسلي"
                 variant="outlined"
                 prepend-inner-icon="mdi-barcode"
+                autocomplete="off"
               />
             </v-col>
 
@@ -103,10 +124,13 @@
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="formData.location"
+                id="device-location"
+                name="device-location"
                 label="الموقع"
                 variant="outlined"
                 prepend-inner-icon="mdi-map-marker"
                 placeholder="مثال: البوابة الرئيسية"
+                autocomplete="off"
               />
             </v-col>
 
@@ -183,16 +207,15 @@ const loading = ref(false)
 const showPassword = ref(false)
 
 const deviceTypes = [
-  { title: 'قارئ بصمة الوجه', value: 'face_reader' },
-  { title: 'قارئ بصمة الإصبع', value: 'fingerprint_reader' },
+  { title: 'قارئ بصمة الوجه', value: 'face_recognition' },
+  { title: 'قارئ بصمة الإصبع', value: 'fingerprint' },
   { title: 'قارئ البطاقات', value: 'card_reader' },
-  { title: 'جهاز متعدد الوظائف', value: 'multi_biometric' },
-  { title: 'آخر', value: 'other' }
+  { title: 'جهاز متعدد الوظائف', value: 'hybrid' }
 ]
 
 const defaultFormData = {
   name: '',
-  device_type: 'face_reader',
+  device_type: 'face_recognition',
   ip_address: '',
   port: 80,
   username: 'admin',
@@ -241,12 +264,31 @@ const save = async () => {
 
   loading.value = true
   try {
-    const dataToSend = { ...formData.value }
+    // Only send allowed fields to prevent validation errors
+    const allowedFields = [
+      'name', 'device_type', 'ip_address', 'port', 'username', 'password',
+      'serial_number', 'mac_address', 'location', 'description',
+      'firmware_version', 'model', 'max_faces', 'max_cards', 'max_fingerprints',
+      'is_active', 'capabilities', 'settings'
+    ]
+    
+    const dataToSend = {}
+    allowedFields.forEach(field => {
+      if (formData.value[field] !== undefined && formData.value[field] !== null) {
+        dataToSend[field] = formData.value[field]
+      }
+    })
     
     // Remove password if empty during edit
     if (isEdit.value && !dataToSend.password) {
       delete dataToSend.password
     }
+    
+    // Remove empty strings for optional fields
+    if (!dataToSend.serial_number) delete dataToSend.serial_number
+    if (!dataToSend.mac_address) delete dataToSend.mac_address
+    if (!dataToSend.location) delete dataToSend.location
+    if (!dataToSend.description) delete dataToSend.description
 
     if (isEdit.value) {
       await axios.put(`/devices/${props.device.id}`, dataToSend)

@@ -47,3 +47,28 @@ export {
 
 // Request Logging
 export { requestLogger, morganLogger, errorLogger } from './requestLogger.js';
+
+// Cache Middleware
+export {
+  cacheMiddleware,
+  clearCacheByPattern,
+  clearOrganizationCache,
+  clearUserCache,
+  clearCacheAfterMutation,
+  getCacheStats,
+  flushAllCache,
+  CACHE_TTL
+} from './cache.js';
+
+// Security Middleware
+export {
+  sanitizeInput,
+  preventSQLInjection,
+  preventNoSQLInjection,
+  csrfProtection,
+  blockSuspiciousUserAgents,
+  preventParameterPollution,
+  validateContentType,
+  additionalSecurityHeaders,
+  logSecurityEvent
+} from './security.js';

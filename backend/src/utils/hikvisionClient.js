@@ -32,19 +32,33 @@ export class HikvisionClient {
   async testConnection() {
     try {
       const url = `${this.baseUrl}/ISAPI/System/deviceInfo`;
+      
+      // Add timeout wrapper
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await this.client.fetch(url, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/xml'
-        }
+          'Content-Type': 'application/xml',
+          'Accept': 'application/xml'
+        },
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text().catch(() => 'No response body');
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.text();
-      const result = await parseStringPromise(data);
+      const result = await parseStringPromise(data, { 
+        explicitArray: true,
+        ignoreAttrs: false,
+        mergeAttrs: true
+      });
 
       return {
         success: true,
@@ -59,10 +73,11 @@ export class HikvisionClient {
         }
       };
     } catch (error) {
+      console.error('[HikvisionClient] testConnection error:', error.message);
       return {
         success: false,
         connected: false,
-        error: error.message
+        error: error.name === 'AbortError' ? 'Connection timeout (10s)' : error.message
       };
     }
   }
@@ -130,11 +145,11 @@ export class HikvisionClient {
 
   /**
    * Upload face data to device (DS-K1T series - Access Control Terminal)
-   * Uses multipart/form-data instead of XML base64
+   * Uses multipart/form-data with JSON metadata + binary image
    */
   async uploadFace(faceData) {
     try {
-      const { employeeNo, name, faceLibId = 1, imageBase64 } = faceData;
+      const { employeeNo, name, imageBase64 } = faceData;
 
       if (!imageBase64) {
         throw new Error('Face image is required');
@@ -143,126 +158,171 @@ export class HikvisionClient {
       // Convert base64 to buffer
       const imageBuffer = Buffer.from(imageBase64, 'base64');
 
-      // First, try to add/update user info
-      const userInfoXml = `<?xml version="1.0" encoding="UTF-8"?>
-<UserInfo version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
-  <employeeNo>${employeeNo}</employeeNo>
-  <name>${name}</name>
-  <userType>normal</userType>
-  <Valid>
-    <enable>true</enable>
-    <beginTime>2020-01-01T00:00:00</beginTime>
-    <endTime>2030-12-31T23:59:59</endTime>
-  </Valid>
-  <doorRight>1</doorRight>
-  <RightPlan>
-    <doorNo>1</doorNo>
-    <planTemplateNo>1</planTemplateNo>
-  </RightPlan>
-</UserInfo>`;
+      // Add timeout for entire operation
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      // Add user to device
+      // Step 1: Add/update user info using JSON body (format=json requires JSON body)
+      const userInfoJson = {
+        UserInfo: {
+          employeeNo: employeeNo.toString(),
+          name: name,
+          userType: 'normal',
+          Valid: {
+            enable: true,
+            beginTime: '2020-01-01T00:00:00',
+            endTime: '2030-12-31T23:59:59'
+          },
+          doorRight: '1',
+          RightPlan: [{
+            doorNo: 1,
+            planTemplateNo: '1'
+          }]
+        }
+      };
+
       const userUrl = `${this.baseUrl}/ISAPI/AccessControl/UserInfo/Record?format=json`;
       const userResponse = await this.client.fetch(userUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/xml'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: userInfoXml
+        body: JSON.stringify(userInfoJson),
+        signal: controller.signal
       });
 
-      // Ignore 400 errors (user might already exist)
+      // Ignore 400 errors (user might already exist) - try update instead
       if (!userResponse.ok && userResponse.status !== 400) {
-        const errorText = await userResponse.text();
-        console.warn(`User creation warning: ${userResponse.status} - ${errorText}`);
+        const errorText = await userResponse.text().catch(() => 'No response');
+        console.warn(`[HikvisionClient] User creation warning: ${userResponse.status} - ${errorText}`);
+      } else if (userResponse.status === 400) {
+        // User already exists, try to update
+        const updateUrl = `${this.baseUrl}/ISAPI/AccessControl/UserInfo/Modify?format=json`;
+        await this.client.fetch(updateUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(userInfoJson),
+          signal: controller.signal
+        }).catch(() => {});
       }
 
-      // Try Method 1: Multipart upload (works better for DS-K1T series)
+      // Step 2: Upload face using correct endpoint FaceDataRecord with JSON metadata
       try {
-        const boundary = `----WebKitFormBoundary${Date.now()}`;
+        const boundary = `----FormBoundary${Date.now()}`;
         const CRLF = '\r\n';
-        
-        let body = '';
-        body += `--${boundary}${CRLF}`;
-        body += `Content-Disposition: form-data; name="FaceDataRecord"${CRLF}`;
-        body += `Content-Type: application/xml${CRLF}${CRLF}`;
-        body += `<?xml version="1.0" encoding="UTF-8"?>${CRLF}`;
-        body += `<FaceDataRecord>${CRLF}`;
-        body += `<employeeNo>${employeeNo}</employeeNo>${CRLF}`;
-        body += `</FaceDataRecord>${CRLF}`;
-        body += `--${boundary}${CRLF}`;
-        body += `Content-Disposition: form-data; name="FaceImage"; filename="face.jpg"${CRLF}`;
-        body += `Content-Type: image/jpeg${CRLF}${CRLF}`;
-        
+
+        // JSON metadata for the face record
+        const faceRecordJson = JSON.stringify({
+          employeeNo: employeeNo.toString(),
+          faceLibType: 'blackFD',
+          FDID: '1'
+        });
+
+        let headerPart = '';
+        headerPart += `--${boundary}${CRLF}`;
+        headerPart += `Content-Disposition: form-data; name="FaceDataRecord"${CRLF}`;
+        headerPart += `Content-Type: application/json${CRLF}${CRLF}`;
+        headerPart += faceRecordJson;
+        headerPart += `${CRLF}--${boundary}${CRLF}`;
+        headerPart += `Content-Disposition: form-data; name="FaceImage"; filename="face.jpg"${CRLF}`;
+        headerPart += `Content-Type: image/jpeg${CRLF}${CRLF}`;
+
         const bodyBuffer = Buffer.concat([
-          Buffer.from(body, 'utf8'),
+          Buffer.from(headerPart, 'utf8'),
           imageBuffer,
           Buffer.from(`${CRLF}--${boundary}--${CRLF}`, 'utf8')
         ]);
 
-        const multipartUrl = `${this.baseUrl}/ISAPI/AccessControl/UserInfo/SetFace?format=json`;
-        const multipartResponse = await this.client.fetch(multipartUrl, {
+        const faceUrl = `${this.baseUrl}/ISAPI/AccessControl/FaceDataRecord?format=json`;
+        const faceResponse = await this.client.fetch(faceUrl, {
           method: 'PUT',
           headers: {
             'Content-Type': `multipart/form-data; boundary=${boundary}`,
             'Content-Length': bodyBuffer.length
           },
-          body: bodyBuffer
+          body: bodyBuffer,
+          signal: controller.signal
         });
 
-        if (multipartResponse.ok) {
+        if (faceResponse.ok) {
+          clearTimeout(timeoutId);
           return {
             success: true,
             faceId: employeeNo,
-            method: 'multipart'
+            method: 'FaceDataRecord',
+            message: `Face uploaded successfully for employee ${employeeNo}`
           };
         }
-        
-        const errorText = await multipartResponse.text();
-        console.warn(`Multipart upload failed: ${errorText}`);
-        
-      } catch (multipartError) {
-        console.warn('Multipart method failed:', multipartError.message);
+
+        const errorText = await faceResponse.text().catch(() => 'No response');
+        console.warn(`[HikvisionClient] FaceDataRecord upload failed (${faceResponse.status}): ${errorText}`);
+
+      } catch (faceError) {
+        console.warn('[HikvisionClient] FaceDataRecord method failed:', faceError.message);
       }
 
-      // Try Method 2: Direct JPEG upload
+      // Fallback: Try legacy endpoint UserInfo/SetFace with XML metadata
       try {
-        const jpegUrl = `${this.baseUrl}/ISAPI/AccessControl/UserInfo/Record?format=json&devIndex=1`;
-        const jpegResponse = await this.client.fetch(jpegUrl, {
+        const boundary2 = `----FormBoundary${Date.now()}`;
+        const CRLF = '\r\n';
+
+        let legacyHeader = '';
+        legacyHeader += `--${boundary2}${CRLF}`;
+        legacyHeader += `Content-Disposition: form-data; name="FaceDataRecord"${CRLF}`;
+        legacyHeader += `Content-Type: application/xml${CRLF}${CRLF}`;
+        legacyHeader += `<?xml version="1.0" encoding="UTF-8"?><FaceDataRecord><employeeNo>${employeeNo}</employeeNo></FaceDataRecord>`;
+        legacyHeader += `${CRLF}--${boundary2}${CRLF}`;
+        legacyHeader += `Content-Disposition: form-data; name="FaceImage"; filename="face.jpg"${CRLF}`;
+        legacyHeader += `Content-Type: image/jpeg${CRLF}${CRLF}`;
+
+        const legacyBuffer = Buffer.concat([
+          Buffer.from(legacyHeader, 'utf8'),
+          imageBuffer,
+          Buffer.from(`${CRLF}--${boundary2}--${CRLF}`, 'utf8')
+        ]);
+
+        const legacyUrl = `${this.baseUrl}/ISAPI/AccessControl/UserInfo/SetFace`;
+        const legacyResponse = await this.client.fetch(legacyUrl, {
           method: 'PUT',
           headers: {
-            'Content-Type': 'image/jpeg',
-            'Content-Length': imageBuffer.length
+            'Content-Type': `multipart/form-data; boundary=${boundary2}`,
+            'Content-Length': legacyBuffer.length
           },
-          body: imageBuffer
+          body: legacyBuffer,
+          signal: controller.signal
         });
 
-        if (jpegResponse.ok) {
+        if (legacyResponse.ok) {
+          clearTimeout(timeoutId);
           return {
             success: true,
             faceId: employeeNo,
-            method: 'jpeg-direct'
+            method: 'SetFace-legacy',
+            message: `Face uploaded successfully for employee ${employeeNo}`
           };
         }
 
-        const errorText2 = await jpegResponse.text();
-        console.warn(`Direct JPEG upload failed: ${errorText2}`);
+        const errorText2 = await legacyResponse.text().catch(() => 'No response');
+        console.warn(`[HikvisionClient] Legacy SetFace failed (${legacyResponse.status}): ${errorText2}`);
 
-      } catch (jpegError) {
-        console.warn('JPEG method failed:', jpegError.message);
+      } catch (legacyError) {
+        console.warn('[HikvisionClient] Legacy SetFace method failed:', legacyError.message);
       }
 
-      // If all methods fail, return note to use web interface
+      // All methods failed
+      clearTimeout(timeoutId);
       return {
         success: false,
-        error: 'Device does not support API face upload. Please use web interface at http://' + this.ip,
-        note: 'User created successfully. Face registration must be done via web interface or client software.'
+        error: 'Face upload failed on all methods. Please use web interface at http://' + this.ip,
+        note: 'User was created/updated on device. Face registration must be done via web interface or client software.'
       };
 
     } catch (error) {
+      console.error('[HikvisionClient] uploadFace error:', error.message);
       return {
         success: false,
-        error: error.message
+        error: error.name === 'AbortError' ? 'Upload timeout (30s)' : error.message
       };
     }
   }
@@ -463,51 +523,138 @@ export class HikvisionClient {
         maxResults = 100
       } = params;
 
-      const searchXml = `<?xml version="1.0" encoding="UTF-8"?>
-<AcsEventSearchDescription version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">
-  <searchID>${Date.now()}</searchID>
-  <searchResultPosition>0</searchResultPosition>
-  <maxResults>${maxResults}</maxResults>
-  <AcsEventSearchCond>
-    <searchTimeSpan>
-      <startTime>${startTime}</startTime>
-      <endTime>${endTime}</endTime>
-    </searchTimeSpan>
-  </AcsEventSearchCond>
-</AcsEventSearchDescription>`;
+      // Format dates properly for HikVision
+      const formatTime = (date) => {
+        const d = new Date(date);
+        // Format: YYYY-MM-DDTHH:MM:SS+08:00 or simpler format
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
 
-      const url = `${this.baseUrl}/ISAPI/AccessControl/AcsEvent?format=json`;
-      const response = await this.client.fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/xml'
-        },
-        body: searchXml
+      // Add timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const formattedStart = formatTime(startTime);
+      const formattedEnd   = formatTime(endTime);
+
+      console.log('[HikvisionClient] getAccessLogs request:', {
+        url: `${this.baseUrl}/ISAPI/AccessControl/AcsEvent?format=json`,
+        startTime: formattedStart,
+        endTime: formattedEnd,
+        maxResults
       });
 
+      // ── Method 1: JSON body with ?format=json (DS-K1T / newer firmware) ──
+      const jsonBody = {
+        AcsEventCond: {
+          searchID: '1',
+          searchResultPosition: 0,
+          maxResults: maxResults,
+          major: 0,
+          minor: 0,
+          startTime: formattedStart,
+          endTime: formattedEnd
+        }
+      };
+
+      let response = await this.client.fetch(
+        `${this.baseUrl}/ISAPI/AccessControl/AcsEvent?format=json`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(jsonBody),
+          signal: controller.signal
+        }
+      );
+
+      // ── Method 2: XML body without format=json (older firmware fallback) ──
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errText = await response.text().catch(() => '');
+        console.warn(`[HikvisionClient] JSON method failed (${response.status}): ${errText.substring(0, 100)}. Trying XML...`);
+
+        const searchXml = `<?xml version="1.0" encoding="UTF-8"?>
+<AcsEventCond version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+  <searchID>1</searchID>
+  <searchResultPosition>0</searchResultPosition>
+  <maxResults>${maxResults}</maxResults>
+  <major>0</major>
+  <minor>0</minor>
+  <startTime>${formattedStart}</startTime>
+  <endTime>${formattedEnd}</endTime>
+</AcsEventCond>`;
+
+        // Need a fresh abort controller since the first request consumed the signal
+        const controller2 = new AbortController();
+        const timeoutId2 = setTimeout(() => controller2.abort(), 15000);
+
+        response = await this.client.fetch(
+          `${this.baseUrl}/ISAPI/AccessControl/AcsEvent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/xml',
+              'Accept': 'application/xml'
+            },
+            body: searchXml,
+            signal: controller2.signal
+          }
+        );
+        clearTimeout(timeoutId2);
+      }
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'No response body');
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.text();
-      
+
+      // Parse JSON response
       try {
         const jsonData = JSON.parse(data);
+        const logs = jsonData.AcsEvent?.InfoList || [];
+        console.log(`[HikvisionClient] getAccessLogs: Retrieved ${logs.length} logs (JSON)`);
         return {
           success: true,
-          logs: jsonData.AcsEvent?.InfoList || []
+          logs: logs,
+          format: 'json'
         };
       } catch (e) {
-        const xmlData = await parseStringPromise(data);
-        return {
-          success: true,
-          logs: xmlData.AcsEventList?.AcsEvent || []
-        };
+        // Parse XML response
+        try {
+          const xmlData = await parseStringPromise(data);
+          const logs = xmlData.AcsEventList?.AcsEvent || xmlData.AcsEventCond?.AcsEvent || [];
+          console.log(`[HikvisionClient] getAccessLogs: Retrieved ${logs.length} logs (XML)`);
+          return {
+            success: true,
+            logs: logs,
+            format: 'xml'
+          };
+        } catch (xmlError) {
+          console.error('[HikvisionClient] Failed to parse response:', data.substring(0, 200));
+          return {
+            success: true,
+            logs: [],
+            message: 'No logs found or parse error'
+          };
+        }
       }
     } catch (error) {
+      console.error('[HikvisionClient] getAccessLogs error:', error.message);
       return {
         success: false,
-        error: error.message
+        error: error.name === 'AbortError' ? 'Request timeout (15s)' : error.message
       };
     }
   }
@@ -518,15 +665,24 @@ export class HikvisionClient {
   async reboot() {
     try {
       const url = `${this.baseUrl}/ISAPI/System/reboot`;
+      
+      // Add timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const response = await this.client.fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/xml'
-        }
+        },
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text().catch(() => 'No response body');
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
 
       return {
@@ -534,9 +690,10 @@ export class HikvisionClient {
         message: 'Device reboot initiated'
       };
     } catch (error) {
+      console.error('[HikvisionClient] reboot error:', error.message);
       return {
         success: false,
-        error: error.message
+        error: error.name === 'AbortError' ? 'Connection timeout (10s)' : error.message
       };
     }
   }
@@ -579,110 +736,57 @@ export class HikvisionClient {
   async setTime(dateTime) {
     try {
       const date = new Date(dateTime);
+      
+      // Format date for HikVision: YYYY-MM-DD HH:MM:SS
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      const formattedTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      
+      // Use manual mode instead of NTP for direct time setting
       const timeXml = `<?xml version="1.0" encoding="UTF-8"?>
-<Time>
-  <timeMode>NTP</timeMode>
-  <localTime>${date.toISOString()}</localTime>
+<Time version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+  <timeMode>manual</timeMode>
+  <localTime>${formattedTime}</localTime>
   <timeZone>CST-8:00:00</timeZone>
 </Time>`;
 
       const url = `${this.baseUrl}/ISAPI/System/time`;
+      
+      // Add timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const response = await this.client.fetch(url, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/xml'
+          'Content-Type': 'application/xml',
+          'Accept': 'application/xml'
         },
-        body: timeXml
+        body: timeXml,
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text().catch(() => 'No response body');
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
 
       return {
         success: true,
-        message: 'Time synchronized successfully'
+        message: 'Time synchronized successfully',
+        syncedTime: dateTime
       };
     } catch (error) {
+      console.error('[HikvisionClient] setTime error:', error.message);
       return {
         success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Get access logs from device
-   */
-  async getAccessLogs(filters = {}) {
-    try {
-      const { startTime, endTime, maxResults = 100 } = filters;
-      
-      const searchXml = `<?xml version="1.0" encoding="UTF-8"?>
-<AcsEventCond>
-  <searchID>1</searchID>
-  <searchResultPosition>0</searchResultPosition>
-  <maxResults>${maxResults}</maxResults>
-  ${startTime ? `<startTime>${new Date(startTime).toISOString()}</startTime>` : ''}
-  ${endTime ? `<endTime>${new Date(endTime).toISOString()}</endTime>` : ''}
-  <major>0</major>
-  <minor>0</minor>
-</AcsEventCond>`;
-
-      const url = `${this.baseUrl}/ISAPI/AccessControl/AcsEvent?format=json`;
-      const response = await this.client.fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/xml'
-        },
-        body: searchXml
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.text();
-      
-      try {
-        // Try parsing as JSON first
-        const jsonData = JSON.parse(data);
-        const events = jsonData.AcsEvent?.InfoList || [];
-        
-        return {
-          success: true,
-          logs: events.map(event => ({
-            employeeNo: event.employeeNoString,
-            timestamp: event.time,
-            verificationMethod: this.mapVerificationMethod(event.cardType),
-            logType: event.eventType === 0 ? 'check_in' : 'check_out',
-            temperature: event.temperature,
-            maskDetection: event.maskOn === '1',
-            rawData: event
-          }))
-        };
-      } catch (e) {
-        // Fallback to XML parsing
-        const xmlData = await parseStringPromise(data);
-        const events = xmlData.AcsEventCond?.AcsEvent || [];
-        
-        return {
-          success: true,
-          logs: events.map(event => ({
-            employeeNo: event.employeeNoString?.[0],
-            timestamp: event.time?.[0],
-            verificationMethod: this.mapVerificationMethod(event.cardType?.[0]),
-            logType: event.eventType?.[0] === '0' ? 'check_in' : 'check_out',
-            temperature: event.temperature?.[0],
-            maskDetection: event.maskOn?.[0] === '1',
-            rawData: event
-          }))
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message
+        error: error.name === 'AbortError' ? 'Connection timeout (10s)' : error.message
       };
     }
   }

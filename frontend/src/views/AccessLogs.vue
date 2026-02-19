@@ -151,7 +151,7 @@
 
           <v-col cols="12" md="2">
             <v-text-field
-              v-model="filters.date_from"
+              v-model="filters.startDate"
               label="من تاريخ"
               type="date"
               variant="outlined"
@@ -163,7 +163,7 @@
 
           <v-col cols="12" md="2">
             <v-text-field
-              v-model="filters.date_to"
+              v-model="filters.endDate"
               label="إلى تاريخ"
               type="date"
               variant="outlined"
@@ -175,7 +175,7 @@
 
           <v-col cols="12" md="2">
             <v-select
-              v-model="filters.log_type"
+              v-model="filters.logType"
               label="نوع السجل"
               :items="logTypes"
               variant="outlined"
@@ -434,9 +434,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 const filters = reactive({
   device_id: null,
-  date_from: null,
-  date_to: null,
-  log_type: null
+  startDate: null,
+  endDate: null,
+  logType: null
 })
 
 const pagination = reactive({
@@ -477,7 +477,10 @@ const loadLogs = async () => {
       page: pagination.currentPage,
       limit: pagination.limit,
       search: search.value,
-      ...filters
+      deviceId: filters.device_id || undefined,
+      startDate: filters.startDate || undefined,
+      endDate: filters.endDate || undefined,
+      logType: filters.logType || undefined
     }
 
     const response = await axios.get('/access-logs', { params })
@@ -500,10 +503,10 @@ const loadStats = async () => {
     const response = await axios.get('/access-logs/stats')
     const data = response.data.data
     
-    stats.today = data.todayCount || 0
-    stats.thisWeek = data.weekCount || 0
-    stats.thisMonth = data.monthCount || 0
-    stats.total = data.totalCount || 0
+    stats.today = data.today || 0
+    stats.thisWeek = data.week || 0
+    stats.thisMonth = data.month || 0
+    stats.total = data.total || 0
   } catch (error) {
     console.error('Error loading stats:', error)
   }

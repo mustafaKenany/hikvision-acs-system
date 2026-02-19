@@ -100,6 +100,8 @@ const menuItems = [
   { title: 'الموظفون', icon: 'mdi-account-group', to: '/employees' },
   { title: 'المنظمات', icon: 'mdi-office-building', to: '/organizations' },
   { title: 'الأجهزة', icon: 'mdi-devices', to: '/devices' },
+  { title: 'جداول الدوام', icon: 'mdi-calendar-clock', to: '/work-schedules' },
+  { title: 'تقارير الحضور', icon: 'mdi-chart-box', to: '/attendance-reports' },
   { title: 'سجلات الدخول', icon: 'mdi-login', to: '/access-logs' },
   { title: 'سجل المراجعة', icon: 'mdi-history', to: '/audit-logs' },
   { title: 'المستخدمون', icon: 'mdi-account-cog', to: '/users' },

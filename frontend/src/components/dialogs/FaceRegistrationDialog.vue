@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialog" max-width="600px" persistent>
+  <v-dialog v-model="dialog" max-width="620px" persistent>
     <v-card>
       <v-card-title class="bg-success text-white">
         <v-icon start>mdi-face-recognition</v-icon>
@@ -41,35 +41,140 @@
             </template>
           </v-select>
 
-          <!-- Face Image Upload -->
-          <v-file-input
-            v-model="form.face_image"
-            label="صورة الوجه *"
-            accept="image/jpeg,image/jpg,image/png"
-            prepend-icon="mdi-camera"
-            variant="outlined"
-            :rules="[rules.required, rules.fileSize, rules.fileType]"
-            hint="صيغة JPG أو PNG، بحد أقصى 5MB"
-            persistent-hint
-            show-size
-            @change="previewImage"
-          />
+          <!-- Image Source Tabs -->
+          <v-tabs v-model="imageTab" color="success" class="mb-1" density="compact">
+            <v-tab value="upload">
+              <v-icon start size="small">mdi-upload</v-icon>
+              رفع صورة
+            </v-tab>
+            <v-tab value="camera">
+              <v-icon start size="small">mdi-camera</v-icon>
+              كاميرا الحاسبة
+            </v-tab>
+          </v-tabs>
 
-          <!-- Image Preview -->
-          <v-card v-if="imagePreview" variant="outlined" class="mt-4">
-            <v-card-text class="text-center pa-4">
-              <v-img
-                :src="imagePreview"
-                max-width="300"
-                max-height="300"
-                class="mx-auto"
-                style="border-radius: 8px;"
+          <v-divider class="mb-4" />
+
+          <v-window v-model="imageTab">
+            <!-- File Upload Tab -->
+            <v-window-item value="upload">
+              <v-file-input
+                v-model="form.face_image"
+                label="صورة الوجه *"
+                accept="image/jpeg,image/jpg,image/png"
+                prepend-icon="mdi-image"
+                variant="outlined"
+                :rules="imageTab === 'upload' ? [rules.required, rules.fileSize, rules.fileType] : []"
+                hint="صيغة JPG أو PNG، بحد أقصى 5MB"
+                persistent-hint
+                show-size
+                @change="previewImage"
               />
-              <div class="text-caption text-grey mt-2">
-                معاينة صورة الوجه
+              <v-card v-if="imagePreview" variant="outlined" class="mt-4">
+                <v-card-text class="text-center pa-3">
+                  <v-img
+                    :src="imagePreview"
+                    max-width="280"
+                    max-height="280"
+                    class="mx-auto"
+                    style="border-radius: 8px;"
+                  />
+                  <div class="text-caption text-grey mt-2">معاينة صورة الوجه</div>
+                </v-card-text>
+              </v-card>
+            </v-window-item>
+
+            <!-- Camera Tab -->
+            <v-window-item value="camera">
+              <div class="text-center">
+                <!-- Live video feed -->
+                <div v-show="cameraActive && !capturedImageUrl" class="mb-3">
+                  <video
+                    ref="videoRef"
+                    autoplay
+                    playsinline
+                    muted
+                    style="width: 100%; max-width: 400px; border-radius: 8px; background: #000; display: block; margin: 0 auto;"
+                  />
+                </div>
+
+                <!-- Captured photo preview -->
+                <div v-if="capturedImageUrl" class="mb-3">
+                  <v-img
+                    :src="capturedImageUrl"
+                    max-width="400"
+                    max-height="300"
+                    class="mx-auto"
+                    style="border-radius: 8px;"
+                  />
+                  <div class="text-caption text-grey mt-1">تمت لقطة الصورة - جاهزة للتسجيل</div>
+                </div>
+
+                <!-- Idle state -->
+                <div v-if="!cameraActive && !capturedImageUrl" class="py-6">
+                  <v-icon size="64" color="grey-lighten-1">mdi-camera-off</v-icon>
+                  <div class="text-grey mt-2 text-body-2">اضغط "تفعيل الكاميرا" للبدء</div>
+                </div>
+
+                <!-- Hidden canvas for capture -->
+                <canvas ref="canvasRef" style="display: none;" />
+
+                <!-- Camera controls -->
+                <div class="d-flex justify-center flex-wrap ga-2 mt-3">
+                  <v-btn
+                    v-if="!cameraActive && !capturedImageUrl"
+                    color="primary"
+                    variant="outlined"
+                    prepend-icon="mdi-camera"
+                    @click="startCamera"
+                  >
+                    تفعيل الكاميرا
+                  </v-btn>
+
+                  <v-btn
+                    v-if="cameraActive && !capturedImageUrl"
+                    color="success"
+                    variant="elevated"
+                    prepend-icon="mdi-camera-iris"
+                    size="large"
+                    @click="capturePhoto"
+                  >
+                    التقاط صورة
+                  </v-btn>
+
+                  <v-btn
+                    v-if="capturedImageUrl"
+                    color="warning"
+                    variant="outlined"
+                    prepend-icon="mdi-reload"
+                    @click="retakePhoto"
+                  >
+                    إعادة التقاط
+                  </v-btn>
+
+                  <v-btn
+                    v-if="cameraActive"
+                    color="error"
+                    variant="text"
+                    prepend-icon="mdi-camera-off"
+                    @click="stopCamera"
+                  >
+                    إيقاف الكاميرا
+                  </v-btn>
+                </div>
+
+                <v-alert
+                  v-if="cameraError"
+                  type="error"
+                  variant="tonal"
+                  class="mt-3"
+                  density="compact"
+                >
+                  {{ cameraError }}
+                </v-alert>
               </div>
-            </v-card-text>
-          </v-card>
+            </v-window-item>
+          </v-window>
 
           <!-- Guidelines -->
           <v-alert type="warning" variant="tonal" class="mt-4" density="compact">
@@ -84,12 +189,10 @@
             </div>
           </v-alert>
 
-          <!-- Error Message -->
+          <!-- Error / Success Messages -->
           <v-alert v-if="error" type="error" variant="tonal" class="mt-4" closable @click:close="error = ''">
             {{ error }}
           </v-alert>
-
-          <!-- Success Message -->
           <v-alert v-if="success" type="success" variant="tonal" class="mt-4">
             {{ success }}
           </v-alert>
@@ -99,20 +202,16 @@
       <v-divider />
 
       <v-card-actions class="pa-4">
-        <span v-if="!success" class="text-caption text-grey">
-          <v-icon size="small" color="info">mdi-information</v-icon>
-          🎭 Mock Mode - للتطوير بدون جهاز حقيقي
-        </span>
         <v-spacer />
         <v-btn variant="text" @click="close" :disabled="loading">
           إلغاء
         </v-btn>
-        <v-btn 
-          color="success" 
-          variant="elevated" 
-          @click="submit" 
+        <v-btn
+          color="success"
+          variant="elevated"
+          @click="submit"
           :loading="loading"
-          :disabled="!form.device_id || !form.face_image || success"
+          :disabled="!canSubmit || !!success"
         >
           <v-icon start>mdi-check</v-icon>
           تسجيل الوجه
@@ -123,7 +222,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import axios from '@/api/axios'
 
 const props = defineProps({
@@ -146,9 +245,28 @@ const error = ref('')
 const success = ref('')
 const imagePreview = ref(null)
 
+// Tabs
+const imageTab = ref('upload')
+
+// Camera refs & state
+const videoRef = ref(null)
+const canvasRef = ref(null)
+const cameraActive = ref(false)
+const cameraStream = ref(null)
+const capturedImageUrl = ref(null)
+const capturedBlob = ref(null)
+const cameraError = ref('')
+
 const form = ref({
   device_id: null,
   face_image: null
+})
+
+const canSubmit = computed(() => {
+  if (!form.value.device_id) return false
+  if (imageTab.value === 'upload') return !!(form.value.face_image && form.value.face_image.length)
+  if (imageTab.value === 'camera') return !!capturedBlob.value
+  return false
 })
 
 const rules = {
@@ -167,23 +285,71 @@ const rules = {
 const previewImage = () => {
   if (form.value.face_image && form.value.face_image.length > 0) {
     const reader = new FileReader()
-    reader.onload = (e) => {
-      imagePreview.value = e.target.result
-    }
+    reader.onload = (e) => { imagePreview.value = e.target.result }
     reader.readAsDataURL(form.value.face_image[0])
   } else {
     imagePreview.value = null
   }
 }
 
+// --- Camera methods ---
+
+const startCamera = async () => {
+  cameraError.value = ''
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+    })
+    cameraStream.value = stream
+    if (videoRef.value) {
+      videoRef.value.srcObject = stream
+    }
+    cameraActive.value = true
+  } catch (err) {
+    cameraError.value = 'لا يمكن الوصول للكاميرا. تأكد من منح الإذن في المتصفح.'
+    console.error('[Camera] Error:', err)
+  }
+}
+
+const stopCamera = () => {
+  if (cameraStream.value) {
+    cameraStream.value.getTracks().forEach(track => track.stop())
+    cameraStream.value = null
+  }
+  if (videoRef.value) videoRef.value.srcObject = null
+  cameraActive.value = false
+}
+
+const capturePhoto = () => {
+  if (!videoRef.value || !canvasRef.value) return
+  const video = videoRef.value
+  const canvas = canvasRef.value
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(video, 0, 0)
+  canvas.toBlob((blob) => {
+    if (!blob) return
+    capturedBlob.value = blob
+    capturedImageUrl.value = URL.createObjectURL(blob)
+    stopCamera()
+  }, 'image/jpeg', 0.92)
+}
+
+const retakePhoto = () => {
+  if (capturedImageUrl.value) URL.revokeObjectURL(capturedImageUrl.value)
+  capturedImageUrl.value = null
+  capturedBlob.value = null
+  startCamera()
+}
+
+// --- Devices ---
+
 const loadDevices = async () => {
   loadingDevices.value = true
   try {
     const response = await axios.get('/devices', {
-      params: {
-        is_active: true,
-        limit: 100
-      }
+      params: { is_active: true, limit: 100 }
     })
     devices.value = response.data.data.devices || []
   } catch (err) {
@@ -205,9 +371,21 @@ const getDeviceTypeLabel = (type) => {
   return labels[type] || type
 }
 
+// --- Submit ---
+
 const submit = async () => {
-  const { valid } = await formRef.value.validate()
-  if (!valid) return
+  if (!form.value.device_id) {
+    error.value = 'يرجى اختيار الجهاز'
+    return
+  }
+
+  if (imageTab.value === 'upload') {
+    const { valid } = await formRef.value.validate()
+    if (!valid) return
+  } else if (!capturedBlob.value) {
+    error.value = 'يرجى التقاط صورة أولاً'
+    return
+  }
 
   loading.value = true
   error.value = ''
@@ -217,16 +395,20 @@ const submit = async () => {
     const formData = new FormData()
     formData.append('employee_id', props.employee.id)
     formData.append('device_id', form.value.device_id)
-    formData.append('face_image', form.value.face_image[0])
+
+    if (imageTab.value === 'upload') {
+      formData.append('face_image', form.value.face_image[0])
+    } else {
+      const file = new File([capturedBlob.value], 'face-capture.jpg', { type: 'image/jpeg' })
+      formData.append('face_image', file)
+    }
 
     const response = await axios.post('/biometrics/face/register', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
 
     success.value = response.data.message || 'تم تسجيل الوجه بنجاح!'
-    
+
     setTimeout(() => {
       emit('registered', response.data.data)
       close()
@@ -240,25 +422,44 @@ const submit = async () => {
   }
 }
 
+// --- Lifecycle / Watchers ---
+
 const close = () => {
   if (!loading.value) {
-    form.value = {
-      device_id: null,
-      face_image: null
-    }
+    stopCamera()
+    if (capturedImageUrl.value) URL.revokeObjectURL(capturedImageUrl.value)
+    form.value = { device_id: null, face_image: null }
     imagePreview.value = null
+    imageTab.value = 'upload'
+    capturedImageUrl.value = null
+    capturedBlob.value = null
+    cameraError.value = ''
     error.value = ''
     success.value = ''
-    if (formRef.value) {
-      formRef.value.resetValidation()
-    }
+    if (formRef.value) formRef.value.resetValidation()
     dialog.value = false
   }
 }
 
+watch(imageTab, (newTab) => {
+  if (newTab !== 'camera') {
+    stopCamera()
+    capturedImageUrl.value = null
+    capturedBlob.value = null
+    cameraError.value = ''
+  }
+})
+
 watch(dialog, (newVal) => {
   if (newVal) {
     loadDevices()
+  } else {
+    stopCamera()
   }
+})
+
+onUnmounted(() => {
+  stopCamera()
+  if (capturedImageUrl.value) URL.revokeObjectURL(capturedImageUrl.value)
 })
 </script>

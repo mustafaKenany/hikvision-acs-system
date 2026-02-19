@@ -56,6 +56,42 @@
               placeholder="5"
             />
           </v-col>
+
+          <!-- Username/Password for Discovery -->
+          <v-col cols="12">
+            <v-divider class="mb-2" />
+            <p class="text-caption text-grey mb-3">
+              <v-icon size="small" class="ml-1">mdi-information</v-icon>
+              بيانات الدخول الافتراضية للبحث (اختياري - يستخدم admin/admin123 إذا كان فارغاً)
+            </p>
+          </v-col>
+
+          <v-col cols="12" md="6">
+            <v-text-field
+              v-model="searchConfig.username"
+              label="اسم المستخدم (اختياري)"
+              variant="outlined"
+              prepend-inner-icon="mdi-account"
+              placeholder="admin"
+              hint="اتركه فارغاً لاستخدام الافتراضي"
+              persistent-hint
+            />
+          </v-col>
+
+          <v-col cols="12" md="6">
+            <v-text-field
+              v-model="searchConfig.password"
+              label="كلمة المرور (اختياري)"
+              :type="showPassword ? 'text' : 'password'"
+              variant="outlined"
+              prepend-inner-icon="mdi-lock"
+              :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+              @click:append-inner="showPassword = !showPassword"
+              placeholder="admin123"
+              hint="اتركها فارغة لاستخدام الافتراضي"
+              persistent-hint
+            />
+          </v-col>
         </v-row>
 
         <v-btn
@@ -183,12 +219,15 @@ const searched = ref(false)
 const discoveredDevices = ref([])
 const scannedDevices = ref(0)
 const totalDevices = ref(0)
+const showPassword = ref(false)
 
 const searchConfig = ref({
   ipStart: '192.168.1.1',
   ipEnd: '192.168.1.254',
   port: 80,
-  timeout: 5
+  timeout: 5,
+  username: '',  // Optional - will use default if empty
+  password: ''   // Optional - will use default if empty
 })
 
 const rules = {
@@ -263,5 +302,6 @@ const close = () => {
   searched.value = false
   scannedDevices.value = 0
   totalDevices.value = 0
+  showPassword.value = false
 }
 </script>

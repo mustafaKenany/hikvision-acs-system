@@ -26,7 +26,7 @@ class FaceTemplate extends Model {
           },
         },
         face_id: {
-          type: DataTypes.STRING(100),
+          type: DataTypes.STRING(50),
           allowNull: true,
           comment: 'Face ID from device (FDID)',
         },
@@ -34,11 +34,6 @@ class FaceTemplate extends Model {
           type: DataTypes.STRING(500),
           allowNull: true,
           comment: 'Uploaded face image URL',
-        },
-        template_data: {
-          type: DataTypes.TEXT,
-          allowNull: true,
-          comment: 'Base64 encoded face template from device',
         },
         quality_score: {
           type: DataTypes.INTEGER,
@@ -58,14 +53,14 @@ class FaceTemplate extends Model {
           type: DataTypes.TEXT,
           allowNull: true,
         },
-        synced_at: {
+        last_synced_at: {
           type: DataTypes.DATE,
           allowNull: true,
         },
-        metadata: {
-          type: DataTypes.JSONB,
-          defaultValue: {},
-          comment: 'Face template metadata from device',
+        is_active: {
+          type: DataTypes.BOOLEAN,
+          defaultValue: true,
+          allowNull: false,
         },
         created_at: {
           type: DataTypes.DATE,

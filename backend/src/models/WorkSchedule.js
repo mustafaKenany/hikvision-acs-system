@@ -21,8 +21,8 @@ class WorkSchedule extends Model {
           type: DataTypes.STRING(255),
           allowNull: false,
         },
-        name_ar: {
-          type: DataTypes.STRING(255),
+        description: {
+          type: DataTypes.TEXT,
           allowNull: true,
         },
         start_time: {
@@ -51,15 +51,15 @@ class WorkSchedule extends Model {
           defaultValue: 15,
           comment: 'Grace period for early departure',
         },
+        break_duration: {
+          type: DataTypes.INTEGER,
+          defaultValue: 60,
+          comment: 'Break duration in minutes',
+        },
         expected_hours: {
           type: DataTypes.DECIMAL(4, 2),
           defaultValue: 8.0,
           comment: 'Expected daily working hours',
-        },
-        break_minutes: {
-          type: DataTypes.INTEGER,
-          defaultValue: 60,
-          comment: 'Break duration in minutes',
         },
         is_flexible: {
           type: DataTypes.BOOLEAN,
@@ -70,10 +70,6 @@ class WorkSchedule extends Model {
           type: DataTypes.BOOLEAN,
           defaultValue: true,
           allowNull: false,
-        },
-        description: {
-          type: DataTypes.TEXT,
-          allowNull: true,
         },
         created_at: {
           type: DataTypes.DATE,

@@ -715,36 +715,6 @@ export async function getEmployeeBiometrics(userId, employeeId) {
 }
 
 /**
- * Get departments list for an organization
- */
-export async function getDepartments(userId) {
-  const user = await User.findByPk(userId);
-  if (!user) {
-    throw new AppError('المستخدم غير موجود', 404);
-  }
-
-  const whereClause = {};
-  if (user.role !== 'super_admin') {
-    whereClause.organization_id = user.organization_id;
-  }
-
-  const departments = await Employee.findAll({
-    where: {
-      ...whereClause,
-      department: { [Op.ne]: null }
-    },
-    attributes: [
-      'department',
-      [Employee.sequelize.fn('COUNT', Employee.sequelize.col('id')), 'employee_count']
-    ],
-    group: ['department'],
-    order: [['department', 'ASC']]
-  });
-
-  return departments;
-}
-
-/**
  * Get employee statistics
  */
 export async function getEmployeeStats(userId) {
@@ -837,4 +807,35 @@ export async function updateEmployeePhoto(userId, employeeId, photoUrl, ipAddres
   });
 
   return await getEmployeeById(userId, employeeId);
+}
+
+/**
+ * Get list of unique departments
+ */
+export async function getDepartments(userId) {
+  const currentUser = await User.findByPk(userId);
+  if (!currentUser) {
+    throw new AppError('المستخدم غير موجود', 404);
+  }
+
+  const whereClause = {};
+  
+  // Organization isolation
+  if (currentUser.role !== 'super_admin') {
+    whereClause.organization_id = currentUser.organization_id;
+  }
+
+  const employees = await Employee.findAll({
+    where: whereClause,
+    attributes: ['department'],
+    group: ['department'],
+    raw: true
+  });
+
+  const departments = employees
+    .map(e => e.department)
+    .filter(d => d && d.trim() !== '')
+    .sort();
+
+  return { departments };
 }

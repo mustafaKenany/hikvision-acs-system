@@ -3,7 +3,7 @@
  * معالج طلبات API الخاصة بإدارة الأجهزة
  */
 
-import deviceService from '../services/deviceService.js';
+import * as deviceService from '../services/deviceService.js';
 import { success } from '../utils/response.js';
 import asyncHandler from '../middlewares/asyncHandler.js';
 
@@ -171,11 +171,11 @@ class DeviceController {
    */
   discoverDevices = asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const config = req.body; // {ipStart, ipEnd, port, timeout}
+    const config = req.body; // {ipStart, ipEnd, port, timeout, username, password}
 
     const result = await deviceService.discoverDevices(userId, config);
 
-    return success(res, result, `تم اكتشاف ${result.length} جهاز`, 200);
+    return success(res, result, result.message || `تم اكتشاف ${result.devices.length} جهاز`, 200);
   });
 
   /**
@@ -215,7 +215,7 @@ class DeviceController {
 
     const result = await deviceService.pullDeviceLogs(userId, deviceId, filters);
 
-    return success(res, result, `تم جلب ${result.newLogs} سجل جديد من الجهاز`, 200);
+    return success(res, result, `تم جلب ${result.count} سجل جديد من الجهاز`, 200);
   });
 
   /**

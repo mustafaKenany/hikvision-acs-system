@@ -136,6 +136,36 @@ class Device extends Model {
           allowNull: false,
           defaultValue: DataTypes.NOW,
         },
+        deleted_at: {
+          type: DataTypes.DATE,
+          allowNull: true,
+          comment: 'Soft delete timestamp',
+        },
+        deleted_by: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+          references: {
+            model: 'users',
+            key: 'id',
+          },
+          comment: 'User who deleted this device',
+        },
+        created_by: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+          references: {
+            model: 'users',
+            key: 'id',
+          },
+        },
+        updated_by: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+          references: {
+            model: 'users',
+            key: 'id',
+          },
+        },
       },
       {
         sequelize,
@@ -149,6 +179,7 @@ class Device extends Model {
           { fields: ['ip_address'] },
           { fields: ['is_online'] },
           { fields: ['is_active'] },
+          { fields: ['deleted_at'] },
         ],
       }
     );

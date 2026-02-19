@@ -225,6 +225,43 @@ export async function createDevice(userId, data) {
     }
   });
 
+  // Auto-test connection after creating device
+  try {
+    const client = new HikvisionClient({
+      ip_address: device.ip_address,
+      port: device.port,
+      username: device.username,
+      password: device.password
+    });
+
+    const connectionResult = await Promise.race([
+      client.testConnection(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+    ]);
+
+    if (connectionResult.success) {
+      const updateData = {
+        is_online: true,
+        last_seen: new Date()
+      };
+
+      if (connectionResult.deviceInfo?.firmwareVersion && connectionResult.deviceInfo.firmwareVersion.length <= 50) {
+        updateData.firmware_version = connectionResult.deviceInfo.firmwareVersion;
+      }
+      if (connectionResult.deviceInfo?.model && connectionResult.deviceInfo.model.length <= 100) {
+        updateData.model = connectionResult.deviceInfo.model;
+      }
+      if (connectionResult.deviceInfo?.serialNumber && connectionResult.deviceInfo.serialNumber.length <= 100) {
+        updateData.serial_number = connectionResult.deviceInfo.serialNumber;
+      }
+
+      await device.update(updateData);
+    }
+  } catch (error) {
+    // Ignore connection errors during creation - device will remain offline
+    console.warn(`Failed to auto-test connection for device ${device.id}:`, error.message);
+  }
+
   // Return with organization details
   return await getDeviceById(userId, device.id);
 }
@@ -580,15 +617,23 @@ export async function testConnection(userId, deviceId) {
   // Test connection
   const result = await client.testConnection();
 
-  if (result.success) {
-    // Update device info
-    await device.update({
+  if (result.success && result.connected) {
+    // Update device info with validation
+    const updateData = {
       is_online: true,
-      last_seen: new Date(),
-      firmware_version: result.deviceInfo.firmwareVersion,
-      model: result.deviceInfo.model,
-      serial_number: result.deviceInfo.serialNumber
-    });
+      last_seen: new Date()
+    };
+
+    // Only update if values are valid and within constraints
+    if (result.deviceInfo?.firmwareVersion && result.deviceInfo.firmwareVersion.length <= 50) {
+      updateData.firmware_version = result.deviceInfo.firmwareVersion;
+    }
+    if (result.deviceInfo?.model && result.deviceInfo.model.length <= 100) {
+      updateData.model = result.deviceInfo.model;
+    }
+    // Don't update serial_number during test connection to avoid unique constraint issues
+
+    await device.update(updateData);
 
     // Log action
     await AuditLog.logAction({
@@ -607,6 +652,7 @@ export async function testConnection(userId, deviceId) {
     return {
       success: true,
       connected: true,
+      is_connected: true, // For frontend compatibility
       device_id: device.id,
       device_name: device.name,
       deviceInfo: result.deviceInfo,
@@ -617,6 +663,16 @@ export async function testConnection(userId, deviceId) {
     await device.update({
       is_online: false,
       last_seen: new Date()
+    });
+
+    // Log action
+    await AuditLog.logAction({
+      userId,
+      action: 'read',
+      resourceType: 'device',
+      resourceId: deviceId,
+      description: `اختبار الاتصال بالجهاز: ${device.name} - فشل: ${result.error}`,
+      newValues: { is_online: false }
     });
 
     throw new AppError(`فشل الاتصال بالجهاز: ${result.error}`, 500);
@@ -703,6 +759,7 @@ export async function syncDevice(userId, deviceId) {
     });
 
     syncResults.totalEmployees = employees.length;
+    console.log(`[deviceService] Syncing ${employees.length} employees to device ${device.id}`);
 
     for (const employee of employees) {
       try {
@@ -714,15 +771,17 @@ export async function syncDevice(userId, deviceId) {
           const imageBuffer = await fs.readFile(photoPath);
           imageBase64 = imageBuffer.toString('base64');
         } catch (fileError) {
+          console.error(`[deviceService] Photo file not found for ${employee.name}: ${photoPath}`);
           syncResults.errors.push({
             employee: employee.name,
-            error: 'Photo file not found'
+            error: `Photo file not found: ${photoPath}`
           });
           syncResults.failedUploads++;
           continue;
         }
 
         // Upload face to device
+        console.log(`[deviceService] Uploading face for employee ${employee.employee_no}: ${employee.name}`);
         const uploadResult = await client.uploadFace({
           employeeNo: employee.employee_no,
           name: employee.name,
@@ -732,6 +791,7 @@ export async function syncDevice(userId, deviceId) {
 
         if (uploadResult.success) {
           syncResults.uploadedFaces++;
+          console.log(`[deviceService] ✅ Successfully uploaded face for ${employee.name}`);
           
           // Update employee with device sync info
           await employee.update({
@@ -740,13 +800,16 @@ export async function syncDevice(userId, deviceId) {
           });
         } else {
           syncResults.failedUploads++;
+          console.error(`[deviceService] ❌ Failed to upload face for ${employee.name}: ${uploadResult.error}`);
           syncResults.errors.push({
             employee: employee.name,
-            error: uploadResult.error
+            error: uploadResult.error || 'Unknown error',
+            note: uploadResult.note
           });
         }
       } catch (error) {
         syncResults.failedUploads++;
+        console.error(`[deviceService] Error processing ${employee.name}:`, error.message);
         syncResults.errors.push({
           employee: employee.name,
           error: error.message
@@ -766,7 +829,7 @@ export async function syncDevice(userId, deviceId) {
     action: 'update',
     resourceType: 'device',
     resourceId: deviceId,
-    description: `مزامنة الموظفين مع الجهاز: ${device.name}`,
+    description: `مزامنة الموظفين مع الجهاز: ${device.name} - ${syncResults.uploadedFaces}/${syncResults.totalEmployees || 0} نجح`,
     newValues: { 
       last_sync: new Date(),
       uploaded_faces: syncResults.uploadedFaces,
@@ -775,13 +838,18 @@ export async function syncDevice(userId, deviceId) {
     }
   });
 
+  const successMessage = syncResults.uploadedFaces > 0 
+    ? `تمت المزامنة - رفع ${syncResults.uploadedFaces} وجه من أصل ${syncResults.totalEmployees || 0}`
+    : 'تمت المزامنة - لا يوجد موظفين بصور';
+
   return {
     success: true,
     device_id: device.id,
     device_name: device.name,
     synced_at: device.last_sync,
     results: syncResults,
-    message: `تمت المزامنة بنجاح - تم رفع ${syncResults.uploadedFaces} وجه من أصل ${syncResults.totalEmployees || 0}`
+    message: successMessage,
+    errors: syncResults.errors.length > 0 ? syncResults.errors : undefined
   };
 }
 
@@ -874,7 +942,14 @@ export async function discoverDevices(userId, config) {
     throw new AppError('المستخدم غير موجود', 404);
   }
 
-  const { ipStart, ipEnd, port = 80, timeout = 5 } = config;
+  const { 
+    ipStart, 
+    ipEnd, 
+    port = 80, 
+    timeout = 5,
+    username = 'admin',
+    password = 'admin123'  // Try common default passwords
+  } = config;
 
   if (!ipStart || !ipEnd) {
     throw new AppError('يجب تحديد نطاق IP', 400);
@@ -885,44 +960,69 @@ export async function discoverDevices(userId, config) {
   const devices = [];
   let scannedCount = 0;
 
+  // Limit IP range to prevent excessive scanning
+  const MAX_IPS = 254;
+  if (ipList.length > MAX_IPS) {
+    throw new AppError(`نطاق IP كبير جداً. الحد الأقصى ${MAX_IPS} عنوان`, 400);
+  }
+
+  // Try multiple common credentials
+  const credentials = [
+    { username: username, password: password },
+    { username: 'admin', password: 'admin123' },
+    { username: 'admin', password: '12345' },
+    { username: 'admin', password: 'admin' },
+  ];
+
   // Scan each IP (with limited concurrency)
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 10; // Reduced for better performance
   for (let i = 0; i < ipList.length; i += BATCH_SIZE) {
     const batch = ipList.slice(i, i + BATCH_SIZE);
     
     const results = await Promise.allSettled(
       batch.map(async (ip) => {
         try {
-          const client = new HikvisionClient({
-            ip_address: ip,
-            port,
-            username: 'admin',
-            password: 'admin' // Default for discovery
-          });
+          // Try each credential combination
+          for (const cred of credentials) {
+            try {
+              const client = new HikvisionClient({
+                ip_address: ip,
+                port,
+                username: cred.username,
+                password: cred.password
+              });
 
-          const result = await Promise.race([
-            client.testConnection(),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Timeout')), timeout * 1000)
-            )
-          ]);
+              const result = await Promise.race([
+                client.testConnection(),
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error('Timeout')), timeout * 1000)
+                )
+              ]);
 
-          scannedCount++;
+              if (result.success && result.connected) {
+                scannedCount++;
+                
+                // Check if device already exists
+                const existingDevice = await Device.findOne({
+                  where: { ip_address: ip, deleted_at: null }
+                });
 
-          if (result.success && result.connected) {
-            // Check if device already exists
-            const existingDevice = await Device.findOne({
-              where: { ip_address: ip, deleted_at: null }
-            });
-
-            return {
-              ip,
-              port,
-              deviceInfo: result.deviceInfo,
-              alreadyAdded: !!existingDevice,
-              existingDeviceId: existingDevice?.id
-            };
+                return {
+                  ip,
+                  port,
+                  deviceInfo: result.deviceInfo,
+                  credentials: cred, // Include working credentials
+                  alreadyAdded: !!existingDevice,
+                  existingDeviceId: existingDevice?.id
+                };
+              }
+            } catch (credError) {
+              // Try next credential
+              continue;
+            }
           }
+          
+          scannedCount++;
           return null;
         } catch (error) {
           scannedCount++;
@@ -942,7 +1042,10 @@ export async function discoverDevices(userId, config) {
   return {
     devices,
     totalScanned: scannedCount,
-    found: devices.length
+    found: devices.length,
+    message: devices.length > 0 
+      ? `تم العثور على ${devices.length} جهاز` 
+      : 'لم يتم العثور على أي أجهزة. تأكد من الإعدادات وبيانات الدخول'
   };
 }
 
@@ -1020,6 +1123,16 @@ export async function syncDeviceTime(userId, deviceId) {
   const result = await client.setTime(serverTime);
 
   if (!result.success) {
+    // Log failure
+    await AuditLog.logAction({
+      userId,
+      action: 'update',
+      resourceType: 'device',
+      resourceId: deviceId,
+      description: `مزامنة وقت الجهاز: ${device.name} - فشل: ${result.error}`,
+      oldValues: { time_sync_failed: result.error }
+    });
+    
     throw new AppError(result.error || 'فشلت مزامنة الوقت', 500);
   }
 
@@ -1037,6 +1150,7 @@ export async function syncDeviceTime(userId, deviceId) {
     deviceTime: serverTime,
     serverTime,
     synced: true,
+    syncedTime: result.syncedTime,
     message: 'تمت مزامنة الوقت بنجاح'
   };
 }
@@ -1059,10 +1173,31 @@ export async function pullDeviceLogs(userId, deviceId, filters = {}) {
   const result = await client.getAccessLogs(filters);
 
   if (!result.success) {
+    // Log failure
+    await AuditLog.logAction({
+      userId,
+      action: 'read',
+      resourceType: 'device',
+      resourceId: deviceId,
+      description: `سحب السجلات من الجهاز: ${device.name} - فشل: ${result.error}`,
+      oldValues: { logs_pull_failed: result.error }
+    });
+    
     throw new AppError(result.error || 'فشل سحب السجلات', 500);
   }
 
   const logs = result.logs || [];
+  console.log(`[deviceService] Received ${logs.length} logs from device ${device.id}`);
+  
+  if (logs.length === 0) {
+    return {
+      count: 0,
+      totalReceived: 0,
+      logs: [],
+      message: 'لا توجد سجلات جديدة في الجهاز'
+    };
+  }
+
   const savedLogs = [];
 
   // Import AccessLog model (assuming it exists)
@@ -1071,49 +1206,78 @@ export async function pullDeviceLogs(userId, deviceId, filters = {}) {
   // Save each log to database
   for (const log of logs) {
     try {
+      // Extract data based on format (JSON or XML)
+      const employeeNo = log.employeeNoString || log.employeeNo?.[0] || log.employeeNo;
+      const timestamp = log.time || log.time?.[0];
+      const eventType = log.eventType || log.eventType?.[0];
+      
+      if (!employeeNo || !timestamp) {
+        console.warn('[deviceService] Skipping log with missing data:', log);
+        continue;
+      }
+
       // Find employee by employee_no
       const employee = await Employee.findOne({
         where: {
-          employee_no: log.employeeNo,
+          employee_no: employeeNo,
           organization_id: device.organization_id,
           deleted_at: null
         }
       });
 
+      // Check if log already exists (avoid duplicates)
+      const existingLog = await AccessLogModel.findOne({
+        where: {
+          device_id: deviceId,
+          employee_no: employeeNo,
+          timestamp: new Date(timestamp)
+        }
+      });
+
+      if (existingLog) {
+        console.log(`[deviceService] Duplicate log skipped for employee ${employeeNo}`);
+        continue;
+      }
+
+      const cardType = log.cardType || log.cardType?.[0];
+      const verificationMap = { '1': 'card', '2': 'fingerprint', '3': 'face', '4': 'password' };
+
       const savedLog = await AccessLogModel.create({
         device_id: deviceId,
-        employee_id: employee?.id,
-        employee_no: log.employeeNo,
-        timestamp: log.timestamp,
-        log_type: log.logType || 'check_in',
-        verification_method: log.verificationMethod || 'face',
-        temperature: log.temperature,
-        mask_detection: log.maskDetection,
-        photo: log.photo,
-        raw_data: log
+        employee_id: employee?.id || null,
+        employee_no: employeeNo,
+        employee_name: employee?.name || null,
+        timestamp: new Date(timestamp),
+        log_type: 'check_in',
+        verification_method: verificationMap[cardType] || 'unknown',
+        temperature: log.temperature || log.temperature?.[0] || null,
+        mask_detection: log.maskOn === '1' || log.maskOn?.[0] === '1',
+        photo_url: log.pictureURL || log.pictureURL?.[0] || null,
+        raw_data: log,
+        sync_status: 'synced'
       });
 
       savedLogs.push(savedLog);
     } catch (error) {
-      console.error(`Error saving log for employee ${log.employeeNo}:`, error);
+      console.error(`[deviceService] Error saving log for employee ${log.employeeNoString || log.employeeNo}:`, error.message);
     }
   }
 
   // Log action
   await AuditLog.logAction({
     userId,
-    action: 'update',
+    action: 'read',
     resourceType: 'device',
     resourceId: deviceId,
-    description: `سحب ${savedLogs.length} سجل من الجهاز: ${device.name}`,
-    newValues: { logs_pulled: savedLogs.length }
+    description: `سحب ${savedLogs.length} سجل من الجهاز: ${device.name} (${logs.length} استلام، ${savedLogs.length} جديد)`,
+    newValues: { logs_pulled: savedLogs.length, total_received: logs.length }
   });
 
   return {
     count: savedLogs.length,
     totalReceived: logs.length,
     logs: savedLogs,
-    message: `تم سحب ${savedLogs.length} سجل بنجاح`
+    message: `تم سحب ${savedLogs.length} سجل جديد من أصل ${logs.length}`
   };
 }
 
@@ -1232,26 +1396,3 @@ export async function openDoor(userId, deviceId, doorNumber = 1, duration = 5) {
     message: `تم فتح الباب ${doorNumber} لمدة ${duration} ثواني`
   };
 }
-
-// Export all functions
-export default {
-  getAllDevices,
-  getDeviceById,
-  createDevice,
-  updateDevice,
-  deleteDevice,
-  activateDevice,
-  deactivateDevice,
-  getDeviceStats,
-  getDeviceStatus,
-  testConnection,
-  syncDevice,
-  activateLiveFaceCapture,
-  discoverDevices,
-  getDeviceInfo,
-  syncDeviceTime,
-  pullDeviceLogs,
-  rebootDevice,
-  clearDeviceLogs,
-  openDoor
-};

@@ -38,6 +38,8 @@ import auditLogRoutes from './routes/auditLogRoutes.js';
 import printRoutes from './routes/printRoutes.js';
 import accessLogRoutes from './routes/accessLogRoutes.js';
 import biometricRoutes from './routes/biometricRoutes.js';
+import workScheduleRoutes from './routes/workScheduleRoutes.js';
+import attendanceReportRoutes from './routes/attendanceReportRoutes.js';
 // ... etc
 
 // Create Express app
@@ -63,7 +65,7 @@ app.use(helmet({
 
 // CORS - السماح للـ frontend بالاتصال
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
+  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'],
   credentials: true, // للسماح بـ cookies
   optionsSuccessStatus: 200
 };
@@ -161,23 +163,23 @@ app.use('/api/print', printRoutes);
 // Biometric routes (Face & Card Registration)
 app.use('/api/biometrics', biometricRoutes);
 
+// Work Schedule routes
+app.use('/api/work-schedules', workScheduleRoutes);
+
+// Attendance Report routes
+app.use('/api/reports', attendanceReportRoutes);
+
 // Door routes
 // app.use('/api/doors', doorRoutes);
 
 // Access Permission routes
 // app.use('/api/access-permissions', accessPermissionRoutes);
 
-// Work Schedule routes
-// app.use('/api/work-schedules', workScheduleRoutes);
-
 // Access Timezone routes
 // app.use('/api/access-timezones', accessTimezoneRoutes);
 
 // Attendance routes
 // app.use('/api/attendance', attendanceRoutes);
-
-// Report routes
-// app.use('/api/reports', reportRoutes);
 
 // Notification routes
 // app.use('/api/notifications', notificationRoutes);

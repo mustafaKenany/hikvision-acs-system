@@ -13,6 +13,9 @@ import userRoutes from './userRoutes.js';
 import biometricRoutes from './biometricRoutes.js';
 import printRoutes from './printRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import attendanceLogRoutes from './attendanceLogRoutes.js';
+import workScheduleRoutes from './workScheduleRoutes.js';
+import attendanceReportRoutes from './attendanceReportRoutes.js';
 
 /**
  * Setup all API routes
@@ -51,6 +54,15 @@ export const setupRoutes = (app) => {
   // Notification routes
   app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 
+  // Attendance log routes
+  app.use(`${API_PREFIX}/attendance-logs`, attendanceLogRoutes);
+
+  // Work schedule routes
+  app.use(`${API_PREFIX}/work-schedules`, workScheduleRoutes);
+
+  // Attendance report routes
+  app.use(`${API_PREFIX}/reports`, attendanceReportRoutes);
+
   // Root API route
   app.get(`${API_PREFIX}`, (req, res) => {
     res.json({
@@ -63,9 +75,12 @@ export const setupRoutes = (app) => {
         organizations: `${API_PREFIX}/organizations`,
         devices: `${API_PREFIX}/devices`,
         accessLogs: `${API_PREFIX}/access-logs`,
+        attendanceLogs: `${API_PREFIX}/attendance-logs`,
         auditLogs: `${API_PREFIX}/audit-logs`,
         users: `${API_PREFIX}/users`,
         biometrics: `${API_PREFIX}/biometrics`,
+        workSchedules: `${API_PREFIX}/work-schedules`,
+        reports: `${API_PREFIX}/reports`,
         print: `${API_PREFIX}/print`,
         notifications: `${API_PREFIX}/notifications`
       }

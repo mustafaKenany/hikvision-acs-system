@@ -70,6 +70,12 @@ export const createDeviceValidator = [
     .isLength({ max: 255 })
     .withMessage('الموقع يجب ألا يتجاوز 255 حرف'),
   
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('الوصف يجب ألا يتجاوز 500 حرف'),
+  
   body('firmware_version')
     .optional()
     .trim()
@@ -178,6 +184,12 @@ export const updateDeviceValidator = [
     .trim()
     .isLength({ max: 255 })
     .withMessage('الموقع يجب ألا يتجاوز 255 حرف'),
+  
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('الوصف يجب ألا يتجاوز 500 حرف'),
   
   body('firmware_version')
     .optional()
