@@ -5,6 +5,73 @@
 
 import { Employee, Device, User, FaceTemplate, CardTemplate, sequelize } from '../models/index.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import { uploadFaceViaISAPI, deleteFaceViaISAPI } from './isapiFaceService.js';
+
+/** C# SDK microservice URL (binary HCNetSDK protocol — bypasses ISAPI notSupport) */
+const SDK_SERVICE_URL = process.env.SDK_SERVICE_URL || 'http://localhost:5000';
+
+/** Use ISAPI instead of SDK when port 8000 is not available */
+const shouldUseISAPI = (device) => {
+  return device.sdk_port === 80 || device.sdk_port === 443 || process.env.USE_ISAPI === 'true';
+};
+
+/**
+ * Upload a face image to the device using the C# SDK microservice.
+ * يجب أن تنجح العملية على الجهاز، وإلا سترجع خطأ.
+ */
+async function uploadFaceViaSDKService(device, employee, imageBuffer) {
+  try {
+    // استخدام sdk_port من الجهاز إذا كان موجود، وإلا استخدم 8000
+    const sdkPort = device.sdk_port || 8000;
+    
+    console.log(`[BiometricService] Attempting to upload face for employee ${employee.employee_no} to device ${device.ip_address}:${sdkPort}`);
+    console.log(`[BiometricService] SDK Service URL: ${SDK_SERVICE_URL}`);
+    
+    // device.port is the HTTP/ISAPI port (80). SDK binary protocol typically uses 8000.
+    const body = JSON.stringify({
+      ip:             device.ip_address,
+      port:           sdkPort,
+      username:       device.username || 'admin',
+      password:       device.password || '',
+      employeeNo:     employee.employee_no,
+      name:           employee.name,
+      cardNo:         employee.employee_no,
+      faceImageBase64: imageBuffer.toString('base64'),
+      readerNo:       1
+    });
+
+    const res = await fetch(`${SDK_SERVICE_URL}/api/face/register`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      signal:  AbortSignal.timeout(30_000)
+    });
+
+    const data = await res.json();
+    console.log(`[BiometricService] SDK Service Response:`, data);
+
+    if (data.success) {
+      console.log(`✅ [BiometricService] Face uploaded successfully for employee ${employee.employee_no}`);
+      return { success: true, faceId: employee.employee_no, method: 'sdk-service' };
+    } else {
+      console.error(`❌ [BiometricService] SDK service rejected face: ${data.message} (code ${data.errorCode})`);
+      return { success: false, error: data.message || 'فشل تسجيل الوجه على الجهاز' };
+    }
+  } catch (err) {
+    console.error('❌ [BiometricService] SDK service error:', err.message);
+    console.error('تأكد من أن C# Service شغال على:', SDK_SERVICE_URL);
+    return { success: false, error: `فشل الاتصال بـ SDK Service: ${err.message}` };
+  }
+}
+
+/**
+ * Delete a face from device (best-effort).
+ * NOTE: The C# service does not yet expose a delete endpoint; handled gracefully.
+ */
+async function deleteFaceViaSDKService(device, employee) {
+  // Face delete via SDK is not yet implemented on C# side — no-op for now
+  console.log(`[BiometricService] Face delete from device skipped (SDK service delete not yet implemented) for employee ${employee.employee_no}`);
+}
 
 /**
  * Check if we should use Mock or Real Device Service
@@ -51,34 +118,46 @@ export async function registerFace(userId, employeeId, deviceId, imageBuffer) {
       throw new AppError('الجهاز غير موجود أو غير مفعّل', 404);
     }
 
-    // 4. Upload face to device via ISAPI
-    const { HikvisionClient } = await import('../utils/hikvisionClient.js');
-    const hikvisionClient = new HikvisionClient(device);
-    const uploadResult = await hikvisionClient.uploadFace({
-      employeeNo: employee.employee_no,
-      name: employee.name,
-      imageBase64: imageBuffer.toString('base64')
-    });
-
-    if (!uploadResult.success) {
-      console.warn('[BiometricService] Face upload to device warning:', uploadResult.error);
-      // Still save to DB - device might be temporarily unreachable
+    // 4. Upload face to device - choose method based on available port
+    console.log(`[BiometricService] Starting face registration for employee #${employee.employee_no} on device ${device.name}`);
+    
+    let uploadResult;
+    if (shouldUseISAPI(device)) {
+      console.log(`[BiometricService] Using ISAPI (HTTP) on port ${device.port || 80}`);
+      uploadResult = await uploadFaceViaISAPI(device, employee, imageBuffer);
     } else {
-      console.log(`[BiometricService] Face uploaded to device via ${uploadResult.method}`);
+      console.log(`[BiometricService] Using SDK Binary Protocol on port ${device.sdk_port || 8000}`);
+      uploadResult = await uploadFaceViaSDKService(device, employee, imageBuffer);
     }
 
-    // 5. Save face template to database (upsert to handle duplicate employee+device)
+    // 5. إذا فشل رفع الصورة للجهاز، نوقف العملية ونرجع خطأ
+    if (!uploadResult.success) {
+      const portInfo = shouldUseISAPI(device) 
+        ? `${device.ip_address}:${device.port || 80} (HTTP/ISAPI)`
+        : `${device.ip_address}:${device.sdk_port || 8000} (SDK Binary)`;
+      
+      throw new AppError(
+        `فشل تسجيل الوجه على الجهاز: ${uploadResult.error}\n\n` +
+        `تأكد من:\n` +
+        `1. الجهاز متصل وشغال (${portInfo})\n` +
+        `2. معلومات تسجيل الدخول للجهاز صحيحة\n` +
+        `3. الجهاز يدعم ${shouldUseISAPI(device) ? 'ISAPI REST API' : 'SDK Binary Protocol'}`,
+        500
+      );
+    }
+
+    // 6. Save face template to database
     const [faceTemplate] = await FaceTemplate.upsert({
       employee_id: employee.id,
       device_id: device.id,
       face_id: uploadResult.faceId || employee.employee_no,
-      sync_status: uploadResult.success ? 'synced' : 'failed',
-      sync_error: uploadResult.success ? null : (uploadResult.error || null),
-      last_synced_at: uploadResult.success ? new Date() : null,
+      sync_status: 'synced',
+      sync_error: null,
+      last_synced_at: new Date(),
       is_active: true
     }, { transaction });
 
-    // 6. Update employee metadata
+    // 7. Update employee metadata
     await employee.update({
       metadata: {
         ...employee.metadata,
@@ -90,8 +169,11 @@ export async function registerFace(userId, employeeId, deviceId, imageBuffer) {
 
     await transaction.commit();
 
+    console.log(`✅ [BiometricService] Face registration completed successfully for employee #${employee.employee_no}`);
+
     return {
       success: true,
+      message: 'تم تسجيل الوجه على الجهاز بنجاح',
       employee: {
         id: employee.id,
         name: employee.name,
@@ -104,12 +186,16 @@ export async function registerFace(userId, employeeId, deviceId, imageBuffer) {
       },
       face_template: {
         id: faceTemplate.id,
-        registered_at: faceTemplate.created_at
+        registered_at: faceTemplate.created_at,
+        sync_status: 'synced'
       }
     };
 
   } catch (error) {
-    await transaction.rollback();
+    // Only rollback if transaction is still active
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
     throw error;
   }
 }
@@ -151,12 +237,16 @@ export async function deleteFace(userId, employeeId, deviceId) {
       throw new AppError('الجهاز غير موجود', 404);
     }
 
-    // 4. Delete from device via ISAPI
-    const { HikvisionClient } = await import('../utils/hikvisionClient.js');
-    const hikvisionClient = new HikvisionClient(device);
-    await hikvisionClient.deleteFace(employee.employee_no).catch(err => {
-      console.warn('[BiometricService] Face deletion from device warning:', err.message);
-    });
+    // 4. Delete from device (best-effort, not fatal if it fails)
+    if (shouldUseISAPI(device)) {
+      await deleteFaceViaISAPI(device, employee).catch(err => {
+        console.warn('[BiometricService] ISAPI face deletion warning:', err.message);
+      });
+    } else {
+      await deleteFaceViaSDKService(device, employee).catch(err => {
+        console.warn('[BiometricService] SDK face deletion warning:', err.message);
+      });
+    }
 
     // 5. Delete from database
     await FaceTemplate.destroy({
@@ -192,7 +282,10 @@ export async function deleteFace(userId, employeeId, deviceId) {
     };
 
   } catch (error) {
-    await transaction.rollback();
+    // Only rollback if transaction is still active
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
     throw error;
   }
 }
@@ -335,7 +428,10 @@ export async function registerCard(userId, employeeId, deviceId, cardNumber, car
     };
 
   } catch (error) {
-    await transaction.rollback();
+    // Only rollback if transaction is still active
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
     throw error;
   }
 }
@@ -429,7 +525,10 @@ export async function deleteCard(userId, employeeId, deviceId) {
     };
 
   } catch (error) {
-    await transaction.rollback();
+    // Only rollback if transaction is still active
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
     throw error;
   }
 }

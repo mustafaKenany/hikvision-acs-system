@@ -416,7 +416,14 @@ const submit = async () => {
 
   } catch (err) {
     console.error('Error registering face:', err)
-    error.value = err.response?.data?.message || 'فشل تسجيل الوجه. يرجى المحاولة مرة أخرى.'
+    console.error('Full error response:', err.response?.data)
+    
+    // عرض رسالة خطأ مفصلة
+    const errorMessage = err.response?.data?.message || 
+                        err.response?.data?.error || 
+                        'فشل تسجيل الوجه. يرجى المحاولة مرة أخرى.'
+    
+    error.value = errorMessage
   } finally {
     loading.value = false
   }

@@ -40,6 +40,7 @@ import accessLogRoutes from './routes/accessLogRoutes.js';
 import biometricRoutes from './routes/biometricRoutes.js';
 import workScheduleRoutes from './routes/workScheduleRoutes.js';
 import attendanceReportRoutes from './routes/attendanceReportRoutes.js';
+import deviceSyncRoutes from './routes/deviceSync.js';
 // ... etc
 
 // Create Express app
@@ -168,6 +169,9 @@ app.use('/api/work-schedules', workScheduleRoutes);
 
 // Attendance Report routes
 app.use('/api/reports', attendanceReportRoutes);
+
+// Device Sync routes (مزامنة الموظفين من الأجهزة)
+app.use('/api/devices', deviceSyncRoutes);
 
 // Door routes
 // app.use('/api/doors', doorRoutes);

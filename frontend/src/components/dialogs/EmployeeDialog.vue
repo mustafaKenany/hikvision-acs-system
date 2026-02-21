@@ -297,6 +297,9 @@ import { ref, computed, watch } from 'vue'
 import axios from '@/api/axios'
 import FaceRegistrationDialog from './FaceRegistrationDialog.vue'
 import CardRegistrationDialog from './CardRegistrationDialog.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 const props = defineProps({
   modelValue: Boolean,
@@ -330,8 +333,9 @@ const photoUrl = computed(() => {
   if (!form.value.photo_url) return null
   // If already absolute URL, return as is
   if (form.value.photo_url.startsWith('http')) return form.value.photo_url
-  // Convert relative path to absolute URL
-  return `http://localhost:3000${form.value.photo_url}`
+  // استخدام الـ API URL من environment variable
+  const API_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'
+  return `${API_URL}${form.value.photo_url}`
 })
 
 const form = ref({
@@ -562,7 +566,7 @@ watch(dialog, (isOpen) => {
       form.value = {
         employee_no: '',
         name: '',
-        organization_id: null,
+        organization_id: authStore.user?.organization_id || null,
         department: '',
         position: '',
         email: '',

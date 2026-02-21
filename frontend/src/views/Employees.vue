@@ -147,6 +147,15 @@
           </v-col>
 
           <v-col cols="12" md="4" class="d-flex gap-2 align-center">
+            <v-btn 
+              color="info" 
+              prepend-icon="mdi-sync" 
+              @click="openSyncDialog" 
+              variant="tonal" 
+              size="small"
+            >
+              مزامنة من الأجهزة
+            </v-btn>
             <v-btn color="success" prepend-icon="mdi-file-excel" @click="handleExportExcel" variant="tonal" size="small">
               Excel
             </v-btn>
@@ -235,6 +244,13 @@
       v-model="dialogOpen"
       :employee="selectedEmployee"
       @saved="onEmployeeSaved"
+    />
+
+    <!-- Device Sync Dialog -->
+    <DeviceSyncDialog
+      v-if="syncDialogOpen"
+      @synced="onSyncCompleted"
+      @close="syncDialogOpen = false"
     />
 
     <!-- Print Card Dialog with QR Code -->
@@ -354,6 +370,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from '@/api/axios'
 import EmployeeDialog from '@/components/dialogs/EmployeeDialog.vue'
+import DeviceSyncDialog from '@/components/dialogs/DeviceSyncDialog.vue'
 import QrcodeVue from 'qrcode.vue'
 import { exportToExcel, exportToPDF, printEmployeeCard } from '@/utils/exportUtils'
 
@@ -362,6 +379,7 @@ const loading = ref(true)
 const employees = ref([])
 const selected = ref([])
 const dialogOpen = ref(false)
+const syncDialogOpen = ref(false)
 const selectedEmployee = ref(null)
 const printCardDialog = ref(false)
 const deleteDialog = ref(false)
@@ -471,6 +489,15 @@ const openAddDialog = () => {
 const openEditDialog = (employee) => {
   selectedEmployee.value = { ...employee }
   dialogOpen.value = true
+}
+
+const openSyncDialog = () => {
+  syncDialogOpen.value = true
+}
+
+const onSyncCompleted = () => {
+  loadEmployees()
+  showSnackbar('تمت المزامنة بنجاح!', 'success')
 }
 
 const onEmployeeSaved = (data) => {
@@ -640,7 +667,9 @@ const showSnackbar = (text, color = 'success') => {
 const getPhotoUrl = (photoUrl) => {
   if (!photoUrl) return null
   if (photoUrl.startsWith('http')) return photoUrl
-  return `http://localhost:3000${photoUrl}`
+  // استخدام الـ API URL من environment variable
+  const API_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'
+  return `${API_URL}${photoUrl}`
 }
 
 // Lifecycle
